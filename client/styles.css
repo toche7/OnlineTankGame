@@ -1,0 +1,90 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #222;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+#container {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+#gameCanvas {
+  border: 3px solid #fff;
+  background-color: #000;
+  display: block;
+  cursor: crosshair;
+}
+
+#ui {
+  color: #fff;
+  padding: 20px;
+  background-color: #333;
+  border: 2px solid #fff;
+  border-radius: 8px;
+  min-width: 150px;
+}
+
+#playerInfo h2 {
+  margin-bottom: 15px;
+  color: #00ff00;
+}
+
+#playerInfo p {
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+#playerCount, #health {
+  color: #00ff00;
+  font-weight: bold;
+}
+
+#score, #kills {
+  color: #ffff00;
+  font-weight: bold;
+}
+
+#leaderboard {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #555;
+}
+
+#leaderboard h3 {
+  color: #00ff00;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+#scoreList {
+  list-style: none;
+  font-size: 12px;
+}
+
+#scoreList li {
+  padding: 5px 0;
+  color: #ccc;
+}
+
+#scoreList li.top-1 {
+  color: #ffff00;
+}
+
+#scoreList li.top-2 {
+  color: #c0c0c0;
+}
+
+#scoreList li.top-3 {
+  color: #cd7f32;
+}
