@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
+const db = require('./database');
 
 const app = express();
 const server = http.createServer(app);
@@ -505,8 +506,10 @@ class AIController {
 
 // Player class
 class Tank {
-  constructor(id, obstacles, isAI = false, aiDifficulty = 'medium') {
-    this.id = id;
+  constructor(id, obstacles, isAI = false, aiDifficulty = 'medium', persistentPlayerId = null, username = null) {
+    this.id = id; // Socket ID for real-time communication
+    this.persistentPlayerId = persistentPlayerId || id; // Persistent player ID for stats
+    this.username = username || `Player_${id.substr(0, 6)}`;
     this.isAI = isAI;
     
     // AI-specific properties
@@ -568,7 +571,7 @@ class Projectile {
 }
 
 // Check win conditions for a specific lobby
-function checkWinConditions(gameCode) {
+async function checkWinConditions(gameCode) {
   if (!gameCode || !lobbies[gameCode]) return false;
   
   const lobby = lobbies[gameCode];
@@ -580,6 +583,9 @@ function checkWinConditions(gameCode) {
     if (alivePlayers.length === 1) {
       lobby.state = 'waiting'; // Reset to waiting so players can start new game
       lobby.gameWinner = alivePlayers[0].id;
+      
+      // Save player stats
+      await saveGameStats(gameCode, lobby.gameWinner);
       
       // Clear old player socket IDs - they will rejoin with new IDs
       lobby.players = {};
@@ -622,6 +628,9 @@ function checkWinConditions(gameCode) {
     
     lobby.gameWinner = topPlayer ? topPlayer.id : null;
     
+    // Save player stats
+    await saveGameStats(gameCode, lobby.gameWinner);
+    
     // Clear old player socket IDs - they will rejoin with new IDs
     lobby.players = {};
     // Keep the hostGameSocketId so we can identify the host when they rejoin
@@ -646,6 +655,35 @@ function checkWinConditions(gameCode) {
   
   return false;
 }
+
+// Save player stats after game ends
+async function saveGameStats(gameCode, winnerId) {
+  const lobby = lobbies[gameCode];
+  if (!lobby || !lobby.gamePlayers) return;
+  
+  // Save stats for all players (excluding AI)
+  const players = Object.values(lobby.gamePlayers).filter(p => !p.isAI);
+  
+  for (const player of players) {
+    try {
+      // Calculate deaths (3 lives - remaining lives)
+      const deaths = 3 - player.livesRemaining + (player.isAlive ? 0 : 1);
+      
+      // Use persistent player ID for stats
+      await db.updatePlayerStats(player.persistentPlayerId, {
+        kills: player.kills || 0,
+        deaths: deaths,
+        score: player.score || 0,
+        isWinner: player.id === winnerId
+      });
+      
+      console.log(`Saved stats for player ${player.username} (${player.persistentPlayerId}): ${player.kills} kills, ${deaths} deaths, score: ${player.score}`);
+    } catch (error) {
+      console.error(`Error saving stats for player ${player.persistentPlayerId}:`, error);
+    }
+  }
+}
+
 
 // Broadcast lobby status to all clients
 function broadcastLobbyStatus() {
@@ -688,8 +726,12 @@ io.on('connection', (socket) => {
   });
   
   // Lobby event handlers
-  socket.on('createGame', (data) => {
+  socket.on('createGame', async (data) => {
     const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
+    const username = data?.username || `Player_${playerId.substr(0, 6)}`;
+    
+    // Register/update player in database
+    await db.getPlayer(playerId, username);
     
     // Check if we've reached the maximum number of concurrent games
     const activeGames = Object.values(lobbies).filter(lobby => lobby.state === 'playing').length;
@@ -718,6 +760,8 @@ io.on('connection', (socket) => {
     
     lobbies[gameCode].players[socket.id] = {
       id: socket.id,
+      playerId: playerId,
+      username: username,
       isHost: true
     };
     
@@ -732,7 +776,7 @@ io.on('connection', (socket) => {
     // Broadcast lobby status update to all connected clients
     broadcastLobbyStatus();
     
-    console.log(`Game ${gameCode} created by ${socket.id}`);
+    console.log(`Game ${gameCode} created by ${username} (${socket.id})`);
   });
   
   socket.on('joinGame', (data) => {
@@ -978,8 +1022,13 @@ io.on('connection', (socket) => {
   });
 
   // Game initialization - validate player is from a valid lobby
-  socket.on('initGame', (data) => {
+  socket.on('initGame', async (data) => {
     const gameCode = data.gameCode;
+    const persistentPlayerId = data.playerId || socket.id;
+    const username = data.username || `Player_${socket.id.substr(0, 6)}`;
+    
+    // Register/update player in database
+    await db.getPlayer(persistentPlayerId, username);
     
     console.log(`InitGame called by ${socket.id} for game ${gameCode}`);
     console.log(`Lobby exists: ${!!lobbies[gameCode]}, State: ${lobbies[gameCode]?.state}`);
@@ -1015,9 +1064,9 @@ io.on('connection', (socket) => {
     // Create new tank for player if not exists
     const lobby = lobbies[gameCode];
     if (!lobby.gamePlayers[socket.id]) {
-      const tank = new Tank(socket.id, lobby.gameObstacles);
+      const tank = new Tank(socket.id, lobby.gameObstacles, false, 'medium', persistentPlayerId, username);
       lobby.gamePlayers[socket.id] = tank;
-      console.log(`Created tank for player ${socket.id}, isAlive: ${tank.isAlive}`);
+      console.log(`Created tank for player ${username} (${socket.id}), isAlive: ${tank.isAlive}`);
     }
 
     // Send initial game state to new player
@@ -1189,6 +1238,43 @@ io.on('connection', (socket) => {
         });
         console.log('New game started!');
       }
+    }
+  });
+
+  // Stats socket handlers
+  socket.on('updateUsername', async (data) => {
+    try {
+      await db.getPlayer(data.playerId, data.username);
+      console.log(`Username updated: ${data.username} (${data.playerId})`);
+    } catch (error) {
+      console.error('Error updating username:', error);
+    }
+  });
+
+  socket.on('getPersonalStats', async (data) => {
+    try {
+      const player = await db.getPlayer(data.playerId);
+      const sortBy = 'wins'; // Default sort
+      const rank = await db.getPlayerRank(data.playerId, sortBy);
+      
+      socket.emit('personalStats', {
+        ...player,
+        rank: rank
+      });
+    } catch (error) {
+      console.error('Error getting personal stats:', error);
+      socket.emit('personalStats', null);
+    }
+  });
+
+  socket.on('getLeaderboard', async (data) => {
+    try {
+      const sortBy = data.sortBy || 'wins';
+      const leaderboard = await db.getLeaderboard(sortBy, 50);
+      socket.emit('leaderboard', leaderboard);
+    } catch (error) {
+      console.error('Error getting leaderboard:', error);
+      socket.emit('leaderboard', []);
     }
   });
 

@@ -31,10 +31,19 @@ const keys = {};
 let mouseAngle = 0;
 let selectedMelody = 'battle'; // Default melody
 
+// Get persistent player ID
+let persistentPlayerId = localStorage.getItem('tankGamePlayerId');
+let username = localStorage.getItem('tankGameUsername');
+
 // Initialize game when connected
 socket.on('connect', () => {
   console.log('Connected to server, initializing game with code:', gameCode, 'wasHost:', wasHost);
-  socket.emit('initGame', { gameCode: gameCode, wasHost: wasHost });
+  socket.emit('initGame', { 
+    gameCode: gameCode, 
+    wasHost: wasHost,
+    playerId: persistentPlayerId,
+    username: username
+  });
 });
 
 // Handle redirect to lobby if game not valid

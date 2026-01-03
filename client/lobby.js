@@ -10,12 +10,29 @@ if (!playerId) {
   console.log('Using existing player ID:', playerId);
 }
 
+// Get or set username
+let username = localStorage.getItem('tankGameUsername');
+if (!username) {
+  username = `Player_${playerId.substr(7, 6)}`;
+  localStorage.setItem('tankGameUsername', username);
+}
+
 let currentGameCode = null;
 let isHost = false;
 let playersInLobby = {};
 
+// Update username display
+function updateUsernameDisplay() {
+  const displayElement = document.getElementById('playerNameDisplay');
+  if (displayElement) {
+    displayElement.textContent = username;
+  }
+}
+
 // Check if returning from a finished game and auto-rejoin
 window.addEventListener('DOMContentLoaded', () => {
+  updateUsernameDisplay();
+  
   const urlParams = new URLSearchParams(window.location.search);
   const rejoinCode = urlParams.get('rejoin');
   const oldSocketId = urlParams.get('oldSocketId');
@@ -64,9 +81,48 @@ const statusMessage = document.getElementById('statusMessage');
 const gameModeSelect = document.getElementById('gameMode');
 const aiSettings = document.getElementById('aiSettings');
 
+// Username modal elements
+const usernameModal = document.getElementById('usernameModal');
+const usernameInput = document.getElementById('usernameInput');
+const saveUsernameBtn = document.getElementById('saveUsernameBtn');
+const cancelUsernameBtn = document.getElementById('cancelUsernameBtn');
+const changeNameBtn = document.getElementById('changeNameBtn');
+
+// Username modal handlers
+changeNameBtn.addEventListener('click', () => {
+  usernameInput.value = username;
+  usernameModal.classList.remove('hidden');
+  usernameInput.focus();
+});
+
+cancelUsernameBtn.addEventListener('click', () => {
+  usernameModal.classList.add('hidden');
+});
+
+saveUsernameBtn.addEventListener('click', () => {
+  const newName = usernameInput.value.trim();
+  if (newName && newName.length >= 2) {
+    username = newName;
+    localStorage.setItem('tankGameUsername', username);
+    updateUsernameDisplay();
+    usernameModal.classList.add('hidden');
+    // Notify server of name change
+    socket.emit('updateUsername', { playerId, username });
+    showStatus('Username updated!');
+  } else {
+    showError('Username must be at least 2 characters');
+  }
+});
+
+usernameInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    saveUsernameBtn.click();
+  }
+});
+
 // Create new game
 createGameBtn.addEventListener('click', () => {
-  socket.emit('createGame', { playerId: playerId });
+  socket.emit('createGame', { playerId: playerId, username: username });
 });
 
 // Toggle AI settings visibility based on game mode

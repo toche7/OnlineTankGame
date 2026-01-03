@@ -10,6 +10,15 @@
   <div class="container">
     <h1>🎮 Tank Battle Game 🎮</h1>
     
+    <!-- Player Profile Section -->
+    <div class="player-profile">
+      <div class="profile-info">
+        <span id="playerNameDisplay">Guest</span>
+        <button id="changeNameBtn" class="btn-small">✏️ Change Name</button>
+        <a href="stats.html" class="btn-small">📊 Stats</a>
+      </div>
+    </div>
+    
     <div class="lobby-section">
       <h2>Game Lobby</h2>
       
@@ -124,6 +133,18 @@
       
       <div id="errorMessage" class="error-message hidden"></div>
       <div id="statusMessage" class="status-message hidden"></div>
+    </div>
+    
+    <!-- Username Modal -->
+    <div id="usernameModal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Enter Your Name</h3>
+        <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20">
+        <div class="modal-buttons">
+          <button id="saveUsernameBtn" class="btn btn-primary">Save</button>
+          <button id="cancelUsernameBtn" class="btn btn-secondary">Cancel</button>
+        </div>
+      </div>
     </div>
     
     <div class="info-section">

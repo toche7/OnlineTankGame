@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tank Game - Statistics</title>
+  <link rel="stylesheet" href="stats.css">
+</head>
+<body>
+  <div class="container">
+    <h1>📊 Player Statistics & Leaderboard</h1>
+    
+    <div class="nav-buttons">
+      <a href="lobby.html" class="btn btn-secondary">← Back to Lobby</a>
+    </div>
+    
+    <!-- Personal Stats -->
+    <div class="stats-section">
+      <h2>Your Statistics</h2>
+      <div id="personalStats" class="personal-stats">
+        <div class="stat-card">
+          <div class="stat-value" id="yourWins">0</div>
+          <div class="stat-label">Wins</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="yourGames">0</div>
+          <div class="stat-label">Games Played</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="yourKills">0</div>
+          <div class="stat-label">Total Kills</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="yourDeaths">0</div>
+          <div class="stat-label">Total Deaths</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="yourKD">0.00</div>
+          <div class="stat-label">K/D Ratio</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="yourWinRate">0%</div>
+          <div class="stat-label">Win Rate</div>
+        </div>
+      </div>
+      <div id="yourRank" class="your-rank">
+        <span>Your Rank: </span><span id="rankValue" class="rank-value">#-</span>
+      </div>
+    </div>
+    
+    <!-- Leaderboard Controls -->
+    <div class="leaderboard-section">
+      <h2>🏆 Global Leaderboard</h2>
+      
+      <div class="sort-controls">
+        <label for="sortBy">Sort by:</label>
+        <select id="sortBy">
+          <option value="wins">Most Wins</option>
+          <option value="kills">Most Kills</option>
+          <option value="score">Highest Score</option>
+          <option value="winRate">Win Rate</option>
+          <option value="kd">K/D Ratio</option>
+        </select>
+        <button id="refreshBtn" class="btn btn-small">🔄 Refresh</button>
+      </div>
+      
+      <div class="leaderboard-table">
+        <table id="leaderboard">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Player</th>
+              <th>Wins</th>
+              <th>Games</th>
+              <th>Kills</th>
+              <th>Deaths</th>
+              <th>K/D</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody">
+            <tr>
+              <td colspan="8" class="loading">Loading...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="stats.js"></script>
+</body>
+</html>
