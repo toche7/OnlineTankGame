@@ -72,10 +72,12 @@ startGameBtn.addEventListener('click', () => {
   if (isHost && currentGameCode) {
     const tankSpeed = parseInt(document.getElementById('tankSpeed').value);
     const melodyChoice = document.getElementById('melodyChoice').value;
+    const debugMode = document.getElementById('debugMode').checked;
     socket.emit('startGame', { 
       gameCode: currentGameCode, 
       tankSpeed: tankSpeed,
-      melody: melodyChoice
+      melody: melodyChoice,
+      debugMode: debugMode
     });
   }
 });

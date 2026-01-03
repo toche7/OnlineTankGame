@@ -462,6 +462,7 @@ io.on('connection', (socket) => {
     const gameCode = data.gameCode;
     const tankSpeed = data.tankSpeed || TANK_SPEED; // Default if not provided
     const melody = data.melody || 'battle'; // Default melody
+    const debugMode = data.debugMode || false; // Debug mode for one-hit kills
     
     if (!lobbies[gameCode] || lobbies[gameCode].host !== socket.id) {
       socket.emit('lobbyError', { message: 'Only host can start the game!' });
@@ -487,6 +488,7 @@ io.on('connection', (socket) => {
     lobbies[gameCode].gameStartTime = Date.now();
     lobbies[gameCode].tankSpeed = tankSpeed; // Store tank speed setting
     lobbies[gameCode].melody = melody; // Store melody setting
+    lobbies[gameCode].debugMode = debugMode; // Store debug mode flag
     
     // Initialize game state for this lobby
     lobbies[gameCode].gameObstacles = generateObstacles();
@@ -504,7 +506,7 @@ io.on('connection', (socket) => {
     // Broadcast lobby status update
     broadcastLobbyStatus();
     
-    console.log(`Game ${gameCode} started by host ${socket.id} with tank speed: ${tankSpeed}, melody: ${melody}`);
+    console.log(`Game ${gameCode} started by host ${socket.id} with tank speed: ${tankSpeed}, melody: ${melody}, debug mode: ${debugMode || false}`);
   });
   
   socket.on('leaveLobby', (data) => {
@@ -919,7 +921,9 @@ setInterval(() => {
           const hitX = lobby.gameProjectiles[i].x;
           const hitY = lobby.gameProjectiles[i].y;
           
-          tank.health -= 10;
+          // Apply damage: one-hit kill in debug mode, otherwise 10 damage
+          const damage = lobby.debugMode ? 999 : 10;
+          tank.health -= damage;
           lobby.gameProjectiles.splice(i, 1);
 
           // Broadcast hit explosion (small)
