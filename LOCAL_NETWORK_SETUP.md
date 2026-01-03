@@ -7,42 +7,54 @@
    npm start
    ```
 
-2. The server will display something like:
+2. The server will display:
    ```
-   🎮 Tank Game Server Running!
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   Local:     http://localhost:3000
-   Network:   http://192.168.1.100:3000
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Server running on http://localhost:3000
+   Local network access: http://192.168.1.114:3000
    ```
 
 ## Connecting from Different Devices
 
 ### On the Same Computer (Local):
-- Open your browser and go to: `http://localhost:3000`
+- Open your browser and go to: `http://localhost:3000/lobby.html`
 
 ### From Another Computer on the Same Network:
-1. Note the **Network IP** from the server output (e.g., `192.168.1.100`)
+1. Note the **Network IP** from the server output: `192.168.1.114`
 2. On the other computer, open a browser and go to:
    ```
-   http://192.168.1.100:3000
+   http://192.168.1.114:3000/lobby.html
    ```
 
 ### From Another Device (Phone, Tablet, etc.):
 1. Make sure the device is connected to the **same WiFi** as your computer
-2. Open a browser on that device and enter the Network IP address
-3. Go to: `http://192.168.1.100:3000`
+2. Open a browser on that device and enter:
+   ```
+   http://192.168.1.114:3000/lobby.html
+   ```
 
 ## Testing Multiplayer
 
 1. **Open multiple browser windows/tabs** on your computer:
-   - Tab 1: `http://localhost:3000`
-   - Tab 2: `http://localhost:3000`
+   - Tab 1: `http://localhost:3000/lobby.html`
+   - Tab 2: `http://localhost:3000/lobby.html`
 
 2. **Open on different devices**:
-   - Computer 1: `http://192.168.1.100:3000`
-   - Computer 2: `http://192.168.1.100:3000`
-   - Phone: `http://192.168.1.100:3000`
+   - Computer 1: `http://192.168.1.114:3000/lobby.html`
+   - Computer 2: `http://192.168.1.114:3000/lobby.html`
+   - Phone: `http://192.168.1.114:3000/lobby.html`
+
+## How to Play
+
+1. **Player 1** (Host):
+   - Click "Create New Game"
+   - Wait for other players to join
+   - Adjust settings if desired
+   - Click "Start Game" when ready
+
+2. **Player 2+** (Guests):
+   - See the available games in "Server Status"
+   - Click on any waiting room to join
+   - Wait for host to start
 
 ## Troubleshooting
 

@@ -973,6 +973,7 @@ setInterval(() => {
 }, 1000 / UPDATE_RATE);
 
 const PORT = 3000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Local network access: http://192.168.1.114:${PORT}`);
 });
