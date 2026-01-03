@@ -985,6 +985,10 @@ setInterval(() => {
     // Update player positions for this lobby
     Object.keys(lobby.gamePlayers).forEach(playerId => {
       const tank = lobby.gamePlayers[playerId];
+      
+      // Skip updates for dead/spectating tanks
+      if (!tank.isAlive) return;
+      
       const newX = tank.x + tank.velocityX;
       const newY = tank.y + tank.velocityY;
 
@@ -1002,6 +1006,10 @@ setInterval(() => {
         for (let otherPlayerId of Object.keys(lobby.gamePlayers)) {
           if (otherPlayerId !== playerId) {
             const otherTank = lobby.gamePlayers[otherPlayerId];
+            
+            // Skip collision check with dead/spectating tanks
+            if (!otherTank.isAlive) continue;
+            
             const dx = newX - otherTank.x;
             const dy = newY - otherTank.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
@@ -1061,6 +1069,10 @@ setInterval(() => {
         if (hitTank) return; // Already hit a tank
         
         const tank = lobby.gamePlayers[playerId];
+        
+        // Skip collision check with dead/spectating tanks
+        if (!tank.isAlive) return;
+        
         const dx = lobby.gameProjectiles[i].x - tank.x;
         const dy = lobby.gameProjectiles[i].y - tank.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
