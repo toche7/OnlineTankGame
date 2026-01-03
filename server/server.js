@@ -289,7 +289,9 @@ io.on('connection', (socket) => {
   });
   
   // Lobby event handlers
-  socket.on('createGame', () => {
+  socket.on('createGame', (data) => {
+    const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
+    
     // Check if we've reached the maximum number of concurrent games
     const activeGames = Object.values(lobbies).filter(lobby => lobby.state === 'playing').length;
     if (activeGames >= MAX_CONCURRENT_GAMES) {
@@ -304,6 +306,7 @@ io.on('connection', (socket) => {
       players: {},
       host: socket.id,
       originalHost: socket.id,
+      originalHostPlayerId: playerId, // Store persistent player ID
       state: 'waiting',
       gameStartTime: null,
       gameWinner: null,
@@ -381,9 +384,21 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Check if this player was the host by comparing oldSocketId with hostGameSocketId
-    const wasHost = data.oldSocketId && 
-                    lobbies[gameCode].hostGameSocketId === data.oldSocketId;
+    console.log(`\n=== REJOIN DEBUG ===`);
+    console.log(`Player ${socket.id} rejoining lobby ${gameCode}`);
+    console.log(`Old socket ID: ${data.oldSocketId}`);
+    console.log(`Player ID: ${data.playerId}`);
+    console.log(`Current hostGameSocketId: ${lobbies[gameCode].hostGameSocketId}`);
+    console.log(`Current originalHost: ${lobbies[gameCode].originalHost}`);
+    console.log(`Current originalHostPlayerId: ${lobbies[gameCode].originalHostPlayerId}`);
+    console.log(`Current host: ${lobbies[gameCode].host}`);
+    console.log(`Current players:`, Object.keys(lobbies[gameCode].players));
+    
+    // Check if this player was the host by comparing their persistent player ID
+    const wasHost = data.playerId && 
+                    lobbies[gameCode].originalHostPlayerId === data.playerId;
+    
+    console.log(`Was this player the host? ${wasHost}`);
     
     // Remove old socket ID from players list if it exists
     if (data.oldSocketId && lobbies[gameCode].players[data.oldSocketId]) {
@@ -402,14 +417,23 @@ io.on('connection', (socket) => {
       lobbies[gameCode].originalHost = socket.id;
       lobbies[gameCode].hostGameSocketId = null; // Reset for next game
       console.log(`Original host ${socket.id} reclaimed host status in lobby ${gameCode}`);
-    } else if (Object.keys(lobbies[gameCode].players).length === 0) {
-      // If lobby is empty (all old entries), first person becomes host
+    } else if (Object.keys(lobbies[gameCode].players).length === 0 && !lobbies[gameCode].hostGameSocketId) {
+      // Only assign host to first rejoiner if there's NO hostGameSocketId set
+      // (meaning no one was ever the host in the game)
       lobbies[gameCode].host = socket.id;
       lobbies[gameCode].originalHost = socket.id;
       console.log(`First player ${socket.id} rejoining empty lobby ${gameCode}, assigning as host`);
+    } else if (Object.keys(lobbies[gameCode].players).length === 0 && lobbies[gameCode].hostGameSocketId) {
+      // If lobby is empty but hostGameSocketId exists, keep waiting for the original host
+      // Don't assign anyone as host yet
+      console.log(`Lobby ${gameCode} waiting for original host (hostGameSocketId: ${lobbies[gameCode].hostGameSocketId}) to rejoin`);
     }
     
     const isHost = lobbies[gameCode].host === socket.id;
+    
+    console.log(`Final host assignment: ${lobbies[gameCode].host}`);
+    console.log(`Is ${socket.id} the host? ${isHost}`);
+    console.log(`=== END REJOIN DEBUG ===\n`);
     
     lobbies[gameCode].players[socket.id] = {
       id: socket.id,
@@ -547,10 +571,10 @@ io.on('connection', (socket) => {
     }
     lobbies[gameCode].gameSocketIds.add(socket.id);
     
-    // Track if this player was the host in the lobby (first player to join game)
-    if (!lobbies[gameCode].hostGameSocketId && lobbies[gameCode].originalHost) {
+    // Track if this player was the original host from the lobby
+    if (data.wasHost && !lobbies[gameCode].hostGameSocketId) {
       lobbies[gameCode].hostGameSocketId = socket.id;
-      console.log(`Host game socket ID set to ${socket.id}`);
+      console.log(`Host game socket ID set to ${socket.id} (was lobby host)`);
     }
     
     // Create new tank for player if not exists

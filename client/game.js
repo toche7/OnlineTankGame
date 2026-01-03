@@ -5,6 +5,7 @@ const socket = io();
 // Get game code from URL
 const urlParams = new URLSearchParams(window.location.search);
 const gameCode = urlParams.get('code');
+const wasHost = urlParams.get('wasHost') === 'true';
 
 // Redirect to lobby if no game code
 if (!gameCode) {
@@ -30,8 +31,8 @@ let selectedMelody = 'battle'; // Default melody
 
 // Initialize game when connected
 socket.on('connect', () => {
-  console.log('Connected to server, initializing game with code:', gameCode);
-  socket.emit('initGame', { gameCode: gameCode });
+  console.log('Connected to server, initializing game with code:', gameCode, 'wasHost:', wasHost);
+  socket.emit('initGame', { gameCode: gameCode, wasHost: wasHost });
 });
 
 // Handle redirect to lobby if game not valid

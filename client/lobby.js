@@ -1,5 +1,15 @@
 const socket = io();
 
+// Generate or retrieve persistent player ID
+let playerId = localStorage.getItem('tankGamePlayerId');
+if (!playerId) {
+  playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem('tankGamePlayerId', playerId);
+  console.log('Generated new player ID:', playerId);
+} else {
+  console.log('Using existing player ID:', playerId);
+}
+
 let currentGameCode = null;
 let isHost = false;
 let playersInLobby = {};
@@ -14,7 +24,11 @@ window.addEventListener('DOMContentLoaded', () => {
     // Wait for socket to connect before rejoining
     socket.on('connect', () => {
       console.log('Auto-rejoining lobby:', rejoinCode);
-      socket.emit('rejoinLobby', { gameCode: rejoinCode, oldSocketId: oldSocketId });
+      socket.emit('rejoinLobby', { 
+        gameCode: rejoinCode, 
+        oldSocketId: oldSocketId,
+        playerId: playerId
+      });
       
       // Clear the URL parameters
       window.history.replaceState({}, document.title, '/lobby.html');
@@ -50,7 +64,7 @@ const statusMessage = document.getElementById('statusMessage');
 
 // Create new game
 createGameBtn.addEventListener('click', () => {
-  socket.emit('createGame');
+  socket.emit('createGame', { playerId: playerId });
 });
 
 // Start game (host only)
@@ -152,7 +166,7 @@ socket.on('playerLeftLobby', (data) => {
 socket.on('gameStarting', (data) => {
   showStatus('Game starting in 3 seconds...');
   setTimeout(() => {
-    window.location.href = `/game.html?code=${currentGameCode}`;
+    window.location.href = `/game.html?code=${currentGameCode}&wasHost=${isHost}`;
   }, 3000);
 });
 
