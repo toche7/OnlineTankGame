@@ -65,6 +65,26 @@
                 <input type="checkbox" id="limitedAmmo" style="margin-right: 5px;">
                 <span>🎯 Limited Ammo (20 bullets, regenerate over time)</span>
               </label>
+              
+              <label for="gameMode">🎮 Game Mode:</label>
+              <select id="gameMode">
+                <option value="multiplayer">Multiplayer Only</option>
+                <option value="ai_solo">Solo vs AI Bots</option>
+                <option value="ai_coop">Co-op vs AI Bots</option>
+                <option value="ai_mixed">Multiplayer + AI Fill</option>
+              </select>
+              
+              <div id="aiSettings" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 5px;">
+                <label for="aiDifficulty">🤖 AI Difficulty:</label>
+                <select id="aiDifficulty">
+                  <option value="easy">Easy</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+                
+                <label for="aiCount" style="margin-top: 5px;">🤖 Number of AI Bots:</label>
+                <input type="number" id="aiCount" min="1" max="9" value="3" style="width: 60px; padding: 5px;">
+              </div>
             </div>
             <button id="startGameBtn" class="btn btn-primary">Start Game</button>
             <p class="hint">Waiting for players to join...</p>

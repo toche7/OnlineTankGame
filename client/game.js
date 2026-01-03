@@ -596,8 +596,11 @@ function drawTank(tank, isPlayer) {
   const y = tank.y;
   const rotation = tank.rotation;
   
+  // Check if this is an AI tank
+  const isAI = tank.isAI || (tank.id && tank.id.startsWith('ai_'));
+  
   // Determine tank color based on player status
-  let tankColor = isPlayer ? '#00ff00' : '#ff0000';
+  let tankColor = isPlayer ? '#00ff00' : isAI ? '#ff9900' : '#ff0000'; // Orange for AI
   const isSpectating = !tank.isAlive;
   const opacity = isSpectating ? 0.5 : 1;
   
@@ -735,6 +738,22 @@ function drawTank(tank, isPlayer) {
     ctx.font = 'bold 10px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('SPECTATING', x, y - TANK_SIZE - 5);
+  }
+  
+  // Draw "BOT" label for AI tanks
+  if (isAI && !isSpectating) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ff9900';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('🤖 BOT', x, y - TANK_SIZE - 5);
+    
+    // Draw AI difficulty indicator
+    if (tank.aiDifficulty) {
+      ctx.font = '8px Arial';
+      ctx.fillStyle = '#ffcc66';
+      ctx.fillText(tank.aiDifficulty.toUpperCase(), x, y - TANK_SIZE - 15);
+    }
   }
   
   ctx.globalAlpha = 1; // Reset opacity

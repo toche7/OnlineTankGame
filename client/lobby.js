@@ -61,11 +61,25 @@ const hostControls = document.getElementById('hostControls');
 const playerWaiting = document.getElementById('playerWaiting');
 const errorMessage = document.getElementById('errorMessage');
 const statusMessage = document.getElementById('statusMessage');
+const gameModeSelect = document.getElementById('gameMode');
+const aiSettings = document.getElementById('aiSettings');
 
 // Create new game
 createGameBtn.addEventListener('click', () => {
   socket.emit('createGame', { playerId: playerId });
 });
+
+// Toggle AI settings visibility based on game mode
+if (gameModeSelect) {
+  gameModeSelect.addEventListener('change', () => {
+    const gameMode = gameModeSelect.value;
+    if (gameMode !== 'multiplayer') {
+      aiSettings.style.display = 'block';
+    } else {
+      aiSettings.style.display = 'none';
+    }
+  });
+}
 
 // Start game (host only)
 startGameBtn.addEventListener('click', () => {
@@ -76,6 +90,10 @@ startGameBtn.addEventListener('click', () => {
     const weaponsEnabled = document.getElementById('weaponsEnabled').checked;
     const powerupsEnabled = document.getElementById('powerupsEnabled').checked;
     const limitedAmmo = document.getElementById('limitedAmmo').checked;
+    const gameMode = document.getElementById('gameMode').value;
+    const aiDifficulty = document.getElementById('aiDifficulty').value;
+    const aiCount = parseInt(document.getElementById('aiCount').value);
+    
     socket.emit('startGame', { 
       gameCode: currentGameCode, 
       tankSpeed: tankSpeed,
@@ -83,7 +101,10 @@ startGameBtn.addEventListener('click', () => {
       debugMode: debugMode,
       weaponsEnabled: weaponsEnabled,
       powerupsEnabled: powerupsEnabled,
-      limitedAmmo: limitedAmmo
+      limitedAmmo: limitedAmmo,
+      gameMode: gameMode,
+      aiDifficulty: aiDifficulty,
+      aiCount: aiCount
     });
   }
 });

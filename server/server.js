@@ -67,6 +67,37 @@ function generateGameCode() {
   return code;
 }
 
+// Helper function to sanitize tank data (remove circular references from AI controllers)
+function sanitizeTank(tank) {
+  return {
+    id: tank.id,
+    x: tank.x,
+    y: tank.y,
+    rotation: tank.rotation,
+    health: tank.health,
+    velocityX: tank.velocityX,
+    velocityY: tank.velocityY,
+    score: tank.score,
+    kills: tank.kills,
+    livesRemaining: tank.livesRemaining,
+    isAlive: tank.isAlive,
+    ammo: tank.ammo,
+    activeWeapon: tank.activeWeapon,
+    activePowerup: tank.activePowerup,
+    isAI: tank.isAI || false,
+    aiDifficulty: tank.aiDifficulty || null
+  };
+}
+
+// Helper function to sanitize all players in a lobby
+function sanitizePlayers(players) {
+  const sanitized = {};
+  Object.keys(players).forEach(playerId => {
+    sanitized[playerId] = sanitizeTank(players[playerId]);
+  });
+  return sanitized;
+}
+
 // Obstacle class
 class Obstacle {
   constructor(x, y, width, height) {
@@ -132,10 +163,358 @@ function generateObstacles() {
 
 const generatedObstacles = generateObstacles();
 
+// AI Controller class
+class AIController {
+  constructor(difficulty = 'medium') {
+    this.difficulty = difficulty;
+    this.decisionTimer = 0;
+    this.decisionInterval = this.getDifficultySettings().decisionInterval;
+    this.target = null;
+    this.targetPickup = null;
+    this.state = 'hunting'; // 'hunting', 'fleeing', 'collecting'
+  }
+  
+  getDifficultySettings() {
+    const settings = {
+      easy: {
+        decisionInterval: 1000, // 1 second between decisions
+        aimAccuracy: 0.3, // 30% accuracy
+        reactionTime: 500,
+        aggressiveness: 0.3,
+        pickupPriority: 0.2,
+        shootingDelay: 800
+      },
+      medium: {
+        decisionInterval: 500,
+        aimAccuracy: 0.65,
+        reactionTime: 300,
+        aggressiveness: 0.6,
+        pickupPriority: 0.5,
+        shootingDelay: 400
+      },
+      hard: {
+        decisionInterval: 250,
+        aimAccuracy: 0.9,
+        reactionTime: 100,
+        aggressiveness: 0.9,
+        pickupPriority: 0.7,
+        shootingDelay: 200
+      }
+    };
+    return settings[this.difficulty] || settings.medium;
+  }
+  
+  update(aiTank, lobby, gameCode, io) {
+    if (!aiTank.isAlive) return;
+    
+    const now = Date.now();
+    const settings = this.getDifficultySettings();
+    
+    // Make decisions at intervals based on difficulty
+    if (!this.lastDecisionTime || now - this.lastDecisionTime >= settings.decisionInterval) {
+      this.makeDecision(aiTank, lobby);
+      this.lastDecisionTime = now;
+    }
+    
+    // Execute current behavior
+    switch (this.state) {
+      case 'hunting':
+        this.hunt(aiTank, lobby, settings);
+        break;
+      case 'fleeing':
+        this.flee(aiTank, lobby, settings);
+        break;
+      case 'collecting':
+        this.collectPickup(aiTank, lobby, settings);
+        break;
+    }
+    
+    // Shooting logic
+    if (this.target && Math.random() < settings.aggressiveness) {
+      this.shoot(aiTank, lobby, gameCode, io, settings);
+    }
+  }
+  
+  makeDecision(aiTank, lobby) {
+    const settings = this.getDifficultySettings();
+    
+    // Assess danger
+    if (aiTank.health < 30) {
+      this.state = 'fleeing';
+      return;
+    }
+    
+    // Find nearest enemy
+    let nearestEnemy = null;
+    let nearestDistance = Infinity;
+    
+    Object.values(lobby.gamePlayers).forEach(player => {
+      if (player.id !== aiTank.id && player.isAlive) {
+        const dx = player.x - aiTank.x;
+        const dy = player.y - aiTank.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < nearestDistance) {
+          nearestDistance = dist;
+          nearestEnemy = player;
+        }
+      }
+    });
+    
+    this.target = nearestEnemy;
+    
+    // Check for pickups if health/weapons needed
+    if (Math.random() < settings.pickupPriority) {
+      const nearestPickup = this.findNearestPickup(aiTank, lobby);
+      if (nearestPickup && nearestPickup.distance < 200) {
+        this.targetPickup = nearestPickup;
+        this.state = 'collecting';
+        return;
+      }
+    }
+    
+    this.state = 'hunting';
+  }
+  
+  hunt(aiTank, lobby, settings) {
+    if (!this.target) return;
+    
+    // Calculate direction to target with some randomness for lower difficulties
+    const dx = this.target.x - aiTank.x;
+    const dy = this.target.y - aiTank.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance === 0) return;
+    
+    // Normalize and add noise based on difficulty
+    let moveX = dx / distance;
+    let moveY = dy / distance;
+    
+    // Add randomness for lower difficulties
+    const noise = (1 - settings.aimAccuracy) * 2;
+    moveX += (Math.random() - 0.5) * noise;
+    moveY += (Math.random() - 0.5) * noise;
+    
+    // Apply speed
+    const speedMultiplier = lobby.tankSpeed || TANK_SPEED;
+    const speed = TANK_SPEED * (speedMultiplier / TANK_SPEED);
+    
+    // Check for obstacles in path and avoid
+    const avoidance = this.avoidObstacles(aiTank, moveX, moveY, lobby.gameObstacles);
+    moveX = avoidance.x;
+    moveY = avoidance.y;
+    
+    aiTank.velocityX = moveX * speed;
+    aiTank.velocityY = moveY * speed;
+    
+    // Update rotation to face target
+    aiTank.rotation = Math.atan2(dy, dx);
+  }
+  
+  flee(aiTank, lobby, settings) {
+    // Find nearest health pickup
+    const healthPickup = this.findNearestPickup(aiTank, lobby, 'HEALTH');
+    
+    if (healthPickup) {
+      this.targetPickup = healthPickup;
+      this.state = 'collecting';
+      return;
+    }
+    
+    // Move away from nearest enemy
+    if (this.target) {
+      const dx = aiTank.x - this.target.x;
+      const dy = aiTank.y - this.target.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance > 0) {
+        let moveX = dx / distance;
+        let moveY = dy / distance;
+        
+        // Avoid obstacles
+        const avoidance = this.avoidObstacles(aiTank, moveX, moveY, lobby.gameObstacles);
+        moveX = avoidance.x;
+        moveY = avoidance.y;
+        
+        const speedMultiplier = lobby.tankSpeed || TANK_SPEED;
+        const speed = TANK_SPEED * (speedMultiplier / TANK_SPEED);
+        
+        aiTank.velocityX = moveX * speed;
+        aiTank.velocityY = moveY * speed;
+        aiTank.rotation = Math.atan2(moveY, moveX);
+      }
+    }
+  }
+  
+  collectPickup(aiTank, lobby, settings) {
+    if (!this.targetPickup) {
+      this.state = 'hunting';
+      return;
+    }
+    
+    const dx = this.targetPickup.x - aiTank.x;
+    const dy = this.targetPickup.y - aiTank.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance === 0) {
+      this.state = 'hunting';
+      return;
+    }
+    
+    let moveX = dx / distance;
+    let moveY = dy / distance;
+    
+    // Avoid obstacles
+    const avoidance = this.avoidObstacles(aiTank, moveX, moveY, lobby.gameObstacles);
+    moveX = avoidance.x;
+    moveY = avoidance.y;
+    
+    const speedMultiplier = lobby.tankSpeed || TANK_SPEED;
+    const speed = TANK_SPEED * (speedMultiplier / TANK_SPEED);
+    
+    aiTank.velocityX = moveX * speed;
+    aiTank.velocityY = moveY * speed;
+    aiTank.rotation = Math.atan2(dy, dx);
+  }
+  
+  shoot(aiTank, lobby, gameCode, io, settings) {
+    if (!this.target) return;
+    
+    const now = Date.now();
+    if (this.lastShot && now - this.lastShot < settings.shootingDelay) return;
+    
+    // Check limited ammo
+    if (lobby.limitedAmmo && aiTank.ammo <= 0) return;
+    
+    // Calculate distance to target
+    const dx = this.target.x - aiTank.x;
+    const dy = this.target.y - aiTank.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Only shoot if target is within reasonable range and has line of sight
+    if (distance > 400 || !this.hasLineOfSight(aiTank, this.target, lobby.gameObstacles)) return;
+    
+    // Aim with accuracy based on difficulty
+    let targetAngle = Math.atan2(dy, dx);
+    const aimError = (1 - settings.aimAccuracy) * Math.PI / 6; // Up to 30 degrees error
+    targetAngle += (Math.random() - 0.5) * aimError;
+    
+    aiTank.rotation = targetAngle;
+    
+    // Create projectile
+    const barrelLength = TANK_SIZE + 5;
+    const projectile = new Projectile(
+      aiTank.x + Math.cos(aiTank.rotation) * barrelLength,
+      aiTank.y + Math.sin(aiTank.rotation) * barrelLength,
+      aiTank.rotation,
+      aiTank.id,
+      aiTank.activeWeapon
+    );
+    
+    lobby.gameProjectiles.push(projectile);
+    this.lastShot = now;
+    
+    // Handle limited ammo
+    if (lobby.limitedAmmo) {
+      aiTank.ammo--;
+    }
+    
+    // Handle special weapons (triple shot, etc.)
+    if (aiTank.activeWeapon === 'TRIPLE_SHOT') {
+      const angleOffset = Math.PI / 12; // 15 degrees
+      
+      const projectile2 = new Projectile(
+        aiTank.x + Math.cos(aiTank.rotation - angleOffset) * barrelLength,
+        aiTank.y + Math.sin(aiTank.rotation - angleOffset) * barrelLength,
+        aiTank.rotation - angleOffset,
+        aiTank.id,
+        aiTank.activeWeapon
+      );
+      
+      const projectile3 = new Projectile(
+        aiTank.x + Math.cos(aiTank.rotation + angleOffset) * barrelLength,
+        aiTank.y + Math.sin(aiTank.rotation + angleOffset) * barrelLength,
+        aiTank.rotation + angleOffset,
+        aiTank.id,
+        aiTank.activeWeapon
+      );
+      
+      lobby.gameProjectiles.push(projectile2, projectile3);
+    }
+  }
+  
+  findNearestPickup(aiTank, lobby, type = null) {
+    let nearest = null;
+    let nearestDistance = Infinity;
+    
+    const checkPickups = (pickups) => {
+      pickups.forEach(pickup => {
+        if (type && pickup.type !== type) return;
+        
+        const dx = pickup.x - aiTank.x;
+        const dy = pickup.y - aiTank.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < nearestDistance) {
+          nearestDistance = dist;
+          nearest = { ...pickup, distance: dist };
+        }
+      });
+    };
+    
+    if (lobby.gameWeapons) checkPickups(lobby.gameWeapons);
+    if (lobby.gamePowerups) checkPickups(lobby.gamePowerups);
+    
+    return nearest;
+  }
+  
+  avoidObstacles(aiTank, moveX, moveY, obstacles) {
+    const lookAhead = 40;
+    const futureX = aiTank.x + moveX * lookAhead;
+    const futureY = aiTank.y + moveY * lookAhead;
+    
+    for (let obs of obstacles) {
+      if (obs.collidesWith(futureX, futureY, TANK_SIZE)) {
+        // Turn perpendicular to obstacle
+        return { x: -moveY, y: moveX };
+      }
+    }
+    
+    return { x: moveX, y: moveY };
+  }
+  
+  hasLineOfSight(from, to, obstacles) {
+    const steps = 20;
+    const dx = (to.x - from.x) / steps;
+    const dy = (to.y - from.y) / steps;
+    
+    for (let i = 0; i < steps; i++) {
+      const x = from.x + dx * i;
+      const y = from.y + dy * i;
+      
+      for (let obs of obstacles) {
+        if (obs.collidesWith(x, y, 5)) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  }
+}
+
 // Player class
 class Tank {
-  constructor(id, obstacles) {
+  constructor(id, obstacles, isAI = false, aiDifficulty = 'medium') {
     this.id = id;
+    this.isAI = isAI;
+    
+    // AI-specific properties
+    if (isAI) {
+      this.aiController = new AIController(aiDifficulty);
+      this.aiDifficulty = aiDifficulty;
+    }
+    
     let validSpawn = false;
     
     // Keep trying to spawn until we find a position not on an obstacle
@@ -483,6 +862,9 @@ io.on('connection', (socket) => {
     const tankSpeed = data.tankSpeed || TANK_SPEED; // Default if not provided
     const melody = data.melody || 'battle'; // Default melody
     const debugMode = data.debugMode || false; // Debug mode for one-hit kills
+    const gameMode = data.gameMode || 'multiplayer';
+    const aiDifficulty = data.aiDifficulty || 'medium';
+    const aiCount = data.aiCount || 3;
     
     if (!lobbies[gameCode] || lobbies[gameCode].host !== socket.id) {
       socket.emit('lobbyError', { message: 'Only host can start the game!' });
@@ -512,6 +894,8 @@ io.on('connection', (socket) => {
     lobbies[gameCode].weaponsEnabled = data.weaponsEnabled !== false; // Default true
     lobbies[gameCode].powerupsEnabled = data.powerupsEnabled !== false; // Default true
     lobbies[gameCode].limitedAmmo = data.limitedAmmo || false; // Limited ammo mode
+    lobbies[gameCode].gameMode = gameMode; // Store game mode
+    lobbies[gameCode].aiDifficulty = aiDifficulty; // Store AI difficulty
     
     // Initialize game state for this lobby
     lobbies[gameCode].gameObstacles = generateObstacles();
@@ -521,6 +905,20 @@ io.on('connection', (socket) => {
     lobbies[gameCode].gamePowerups = []; // Power-up pickups
     lobbies[gameCode].lastWeaponSpawn = Date.now();
     lobbies[gameCode].lastPowerupSpawn = Date.now();
+    
+    // Spawn AI tanks based on game mode
+    let numAI = 0; // Initialize outside the if block
+    if (gameMode !== 'multiplayer') {
+      numAI = Math.min(Math.max(1, aiCount), 9); // Clamp between 1-9
+      
+      for (let i = 0; i < numAI; i++) {
+        const aiId = `ai_${gameCode}_${i}`;
+        const aiTank = new Tank(aiId, lobbies[gameCode].gameObstacles, true, aiDifficulty);
+        lobbies[gameCode].gamePlayers[aiId] = aiTank;
+      }
+      
+      console.log(`Spawned ${numAI} AI tanks with difficulty ${aiDifficulty} for game ${gameCode}`);
+    }
     
     // Notify all players in the lobby
     io.to(gameCode).emit('gameStarting', {
@@ -538,7 +936,9 @@ io.on('connection', (socket) => {
       melody,
       debugMode: debugMode || false,
       weapons: lobbies[gameCode].weaponsEnabled,
-      powerups: lobbies[gameCode].powerupsEnabled
+      powerups: lobbies[gameCode].powerupsEnabled,
+      gameMode: gameMode,
+      aiCount: numAI
     });
   });
   
@@ -623,7 +1023,7 @@ io.on('connection', (socket) => {
     // Send initial game state to new player
     socket.emit('init', {
       playerId: socket.id,
-      players: lobby.gamePlayers,
+      players: sanitizePlayers(lobby.gamePlayers),
       gameWidth: GAME_WIDTH,
       gameHeight: GAME_HEIGHT,
       obstacles: lobby.gameObstacles,
@@ -639,7 +1039,7 @@ io.on('connection', (socket) => {
     // Notify other players of new player
     socket.to(socket.gameCode).emit('playerJoined', {
       playerId: socket.id,
-      tank: lobby.gamePlayers[socket.id]
+      tank: sanitizeTank(lobby.gamePlayers[socket.id])
     });
   });
 
@@ -1013,6 +1413,14 @@ setInterval(() => {
       }
     });
     
+    // Update AI players
+    Object.keys(lobby.gamePlayers).forEach(playerId => {
+      const tank = lobby.gamePlayers[playerId];
+      if (tank.isAI && tank.aiController) {
+        tank.aiController.update(tank, lobby, gameCode, io);
+      }
+    });
+    
     // Check win conditions for this lobby
     checkWinConditions(gameCode);
     if (lobby.state === 'finished') return;
@@ -1193,7 +1601,7 @@ setInterval(() => {
 
     // Broadcast game state to all clients in this lobby
     io.to(gameCode).emit('gameState', {
-      players: lobby.gamePlayers,
+      players: sanitizePlayers(lobby.gamePlayers),
       projectiles: lobby.gameProjectiles.map(p => ({ x: p.x, y: p.y, rotation: p.rotation, weaponType: p.weaponType })),
       weapons: lobby.gameWeapons,
       powerups: lobby.gamePowerups
