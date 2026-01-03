@@ -35,6 +35,10 @@ function initAudio() {
 function startBackgroundMusic() {
   try {
     const ctx = initAudio();
+    // Resume audio context if suspended
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
     if (musicPlaying) return;
     
     musicPlaying = true;
@@ -183,6 +187,9 @@ socket.on('gameStarted', (data) => {
     restartBtn.disabled = false;
   }
   
+  // Restart background music
+  startBackgroundMusic();
+  
   updatePlayerCount();
   console.log('Game started!', 'Players:', Object.keys(gameState.players).length);
 });
@@ -264,6 +271,10 @@ canvas.addEventListener('click', () => {
 function playExplosionSound(size) {
   try {
     const ctx = initAudio();
+    // Resume audio context if suspended
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
     const now = ctx.currentTime;
 
     if (size === 'big') {
@@ -308,6 +319,10 @@ function playExplosionSound(size) {
 function playShootSound() {
   try {
     const ctx = initAudio();
+    // Resume audio context if suspended
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
     const now = ctx.currentTime;
     
     const oscillator = ctx.createOscillator();
