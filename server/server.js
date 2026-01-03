@@ -186,6 +186,8 @@ function checkWinConditions() {
       
       if (gameCode) {
         lobbies[gameCode].state = 'waiting'; // Reset to waiting so players can start new game
+        // Clear old player socket IDs - they will rejoin with new IDs
+        lobbies[gameCode].players = {};
         io.to(gameCode).emit('gameEnded', {
           winner: gameWinner,
           reason: 'Last player standing!',
@@ -219,6 +221,8 @@ function checkWinConditions() {
     
     if (gameCode) {
       lobbies[gameCode].state = 'waiting'; // Reset to waiting so players can start new game
+      // Clear old player socket IDs - they will rejoin with new IDs
+      lobbies[gameCode].players = {};
       io.to(gameCode).emit('gameEnded', {
         winner: gameWinner,
         reason: 'Time limit reached! Winner has most kills.',
@@ -244,6 +248,7 @@ io.on('connection', (socket) => {
     lobbies[gameCode] = {
       players: {},
       host: socket.id,
+      originalHost: socket.id,
       state: 'waiting',
       gameStartTime: null,
       gameWinner: null
@@ -313,17 +318,41 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Check if player was the host
-    const wasHost = lobbies[gameCode].host === data.oldSocketId;
+    // Store original host ID if not already stored
+    if (!lobbies[gameCode].originalHost) {
+      lobbies[gameCode].originalHost = lobbies[gameCode].host;
+    }
     
-    // If old host rejoins, maintain host status
+    // Check if player was the original host
+    const wasHost = lobbies[gameCode].host === data.oldSocketId || 
+                    lobbies[gameCode].originalHost === data.oldSocketId;
+    
+    // Remove old socket ID from players list if it exists
+    if (data.oldSocketId && lobbies[gameCode].players[data.oldSocketId]) {
+      delete lobbies[gameCode].players[data.oldSocketId];
+      console.log(`Removed old socket ID ${data.oldSocketId} from lobby ${gameCode}`);
+    }
+    
+    // Clean up any disconnected players (players who haven't rejoined yet but have stale socket IDs)
+    // Keep track of number of players before cleanup
+    const playersBeforeCleanup = Object.keys(lobbies[gameCode].players).length;
+    
+    // If old host rejoins, maintain host status and update originalHost
     if (wasHost) {
       lobbies[gameCode].host = socket.id;
+      lobbies[gameCode].originalHost = socket.id;
+    } else if (Object.keys(lobbies[gameCode].players).length === 0) {
+      // If lobby is empty (all old entries), first person becomes host
+      lobbies[gameCode].host = socket.id;
+      lobbies[gameCode].originalHost = socket.id;
+      console.log(`First player ${socket.id} rejoining empty lobby ${gameCode}, assigning as host`);
     }
+    
+    const isHost = lobbies[gameCode].host === socket.id;
     
     lobbies[gameCode].players[socket.id] = {
       id: socket.id,
-      isHost: wasHost
+      isHost: isHost
     };
     
     socket.join(gameCode);
@@ -340,7 +369,7 @@ io.on('connection', (socket) => {
       players: lobbies[gameCode].players
     });
     
-    console.log(`Player ${socket.id} rejoined game ${gameCode}${wasHost ? ' as host' : ''}`);
+    console.log(`Player ${socket.id} rejoined game ${gameCode}${isHost ? ' as host' : ''} (was original host: ${wasHost})`);
   });
   
   socket.on('startGame', (data) => {
@@ -630,9 +659,12 @@ io.on('connection', (socket) => {
           });
         }
       } else if (wasInLobby && lobbies[gameCode].state === 'playing') {
-        // Player left during active game - remove from lobby players list
-        delete lobbies[gameCode].players[socket.id];
-        console.log(`Player ${socket.id} left during game. Removed from lobby players list.`);
+        // Player left during active game - DON'T remove from lobby players list
+        // They might be transitioning back to lobby after game ends
+        console.log(`Player ${socket.id} disconnected during active game in lobby ${gameCode}.`);
+      } else if (wasInLobby && lobbies[gameCode].state === 'finished') {
+        // Game is finished, player might be transitioning back to lobby
+        console.log(`Player ${socket.id} disconnected from finished game in lobby ${gameCode}.`);
       }
     }
     

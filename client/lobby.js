@@ -92,17 +92,25 @@ socket.on('gameCreated', (data) => {
 
 socket.on('gameJoined', (data) => {
   currentGameCode = data.gameCode;
-  isHost = false;
   playersInLobby = data.players;
+  
+  // Check if this player is the host
+  isHost = playersInLobby[socket.id]?.isHost || false;
   
   showWaitingRoom();
   gameCodeDisplay.textContent = currentGameCode;
   updatePlayersList();
   
-  hostControls.classList.add('hidden');
-  playerWaiting.classList.remove('hidden');
-  
-  showStatus('Successfully joined game!');
+  // Show appropriate controls based on host status
+  if (isHost) {
+    hostControls.classList.remove('hidden');
+    playerWaiting.classList.add('hidden');
+    showStatus('Welcome back! You are the host.');
+  } else {
+    hostControls.classList.add('hidden');
+    playerWaiting.classList.remove('hidden');
+    showStatus('Successfully joined game!');
+  }
 });
 
 socket.on('playerJoinedLobby', (data) => {
