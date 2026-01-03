@@ -39,7 +39,12 @@ joinGameBtn.addEventListener('click', () => {
 startGameBtn.addEventListener('click', () => {
   if (isHost && currentGameCode) {
     const tankSpeed = parseInt(document.getElementById('tankSpeed').value);
-    socket.emit('startGame', { gameCode: currentGameCode, tankSpeed: tankSpeed });
+    const melodyChoice = document.getElementById('melodyChoice').value;
+    socket.emit('startGame', { 
+      gameCode: currentGameCode, 
+      tankSpeed: tankSpeed,
+      melody: melodyChoice
+    });
   }
 });
 

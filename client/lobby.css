@@ -131,9 +131,14 @@ h4 {
 
 .game-settings label {
   display: block;
+  margin-top: 15px;
   margin-bottom: 5px;
   color: #90caf9;
   font-weight: bold;
+}
+
+.game-settings label:first-of-type {
+  margin-top: 0;
 }
 
 .game-settings select {

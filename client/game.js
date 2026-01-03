@@ -26,6 +26,7 @@ let gameState = {
 
 const keys = {};
 let mouseAngle = 0;
+let selectedMelody = 'battle'; // Default melody
 
 // Initialize game when connected
 socket.on('connect', () => {
@@ -44,6 +45,46 @@ socket.on('redirectToLobby', () => {
 let audioContext = null;
 let backgroundMusicOscillators = [];
 let musicPlaying = false;
+
+// Melody patterns
+const melodies = {
+  battle: {
+    notes: [261.63, 293.66, 329.63, 392.00, 349.23, 329.63, 293.66, 261.63], // C4, D4, E4, G4, F4, E4, D4, C4
+    type: 'triangle',
+    tempo: 300,
+    volume: 0.08
+  },
+  classic: {
+    notes: [261.63, 329.63, 392.00, 329.63, 261.63, 293.66, 349.23, 293.66], // C-E-G-E-C-D-F-D
+    type: 'sine',
+    tempo: 400,
+    volume: 0.1
+  },
+  intense: {
+    notes: [261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00], // Chromatic rise
+    type: 'square',
+    tempo: 200,
+    volume: 0.06
+  },
+  chill: {
+    notes: [261.63, 293.66, 349.23, 392.00, 349.23, 293.66], // C-D-F-G-F-D
+    type: 'sine',
+    tempo: 500,
+    volume: 0.09
+  },
+  epic: {
+    notes: [196.00, 261.63, 329.63, 392.00, 493.88, 392.00, 329.63, 261.63], // G3-C4-E4-G4-B4-G4-E4-C4
+    type: 'triangle',
+    tempo: 350,
+    volume: 0.1
+  },
+  retro: {
+    notes: [523.25, 493.88, 440.00, 392.00, 349.23, 329.63, 293.66, 261.63], // C5 down to C4
+    type: 'square',
+    tempo: 250,
+    volume: 0.07
+  }
+};
 
 // Initialize audio context
 function initAudio() {
@@ -65,11 +106,13 @@ function startBackgroundMusic() {
     
     musicPlaying = true;
     
-    // Create a more upbeat battle theme melody
-    const notes = [
-      261.63, 293.66, 329.63, 392.00, // C4, D4, E4, G4
-      349.23, 329.63, 293.66, 261.63  // F4, E4, D4, C4
-    ];
+    // Get selected melody settings
+    const melody = melodies[selectedMelody] || melodies.battle;
+    const notes = melody.notes;
+    const waveType = melody.type;
+    const tempo = melody.tempo;
+    const volume = melody.volume;
+    
     let noteIndex = 0;
     
     function playNote() {
@@ -81,20 +124,20 @@ function startBackgroundMusic() {
       osc.connect(gain);
       gain.connect(ctx.destination);
       
-      osc.type = 'triangle'; // Warmer sound
+      osc.type = waveType;
       osc.frequency.value = notes[noteIndex];
-      gain.gain.setValueAtTime(0.08, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.03, ctx.currentTime + 0.3);
+      gain.gain.setValueAtTime(volume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(volume * 0.4, ctx.currentTime + (tempo / 1000));
       
       osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.3);
+      osc.stop(ctx.currentTime + (tempo / 1000));
       
       backgroundMusicOscillators.push(osc);
       
       noteIndex = (noteIndex + 1) % notes.length;
       
       if (musicPlaying) {
-        setTimeout(playNote, 300); // Faster tempo
+        setTimeout(playNote, tempo);
       }
     }
     
@@ -173,8 +216,10 @@ socket.on('init', (data) => {
   gameState.obstacles = data.obstacles || [];
   gameState.gameStartTime = data.gameStartTime;
   gameState.gameDuration = data.gameDuration;
+  selectedMelody = data.melody || 'battle';
   console.log('Connected with ID:', data.playerId);
   console.log('Players:', Object.keys(gameState.players).length);
+  console.log('Melody:', selectedMelody);
   updatePlayerCount();
   startBackgroundMusic();
 });

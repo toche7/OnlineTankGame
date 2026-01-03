@@ -171,6 +171,12 @@ class Projectile {
 function checkWinConditions() {
   if (gameState !== 'running') return false;
   
+  // Get active game code from any player
+  const activeGameCode = Object.values(players).find(p => p.id);
+  const gameCode = activeGameCode ? Object.keys(lobbies).find(code => 
+    lobbies[code].state === 'playing'
+  ) : null;
+  
   // Check if only 1 player alive (early win condition)
   if (Object.keys(players).length > 1) {
     const alivePlayers = Object.values(players).filter(p => p.isAlive);
@@ -178,12 +184,15 @@ function checkWinConditions() {
       gameState = 'finished';
       gameWinner = alivePlayers[0].id;
       
-      io.emit('gameEnded', {
-        winner: gameWinner,
-        reason: 'Last player standing!',
-        survivors: 1,
-        topKills: alivePlayers[0].kills
-      });
+      if (gameCode) {
+        lobbies[gameCode].state = 'finished';
+        io.to(gameCode).emit('gameEnded', {
+          winner: gameWinner,
+          reason: 'Last player standing!',
+          survivors: 1,
+          topKills: alivePlayers[0].kills
+        });
+      }
       
       return true;
     }
@@ -207,12 +216,15 @@ function checkWinConditions() {
     
     gameWinner = topPlayer ? topPlayer.id : null;
     
-    io.emit('gameEnded', {
-      winner: gameWinner,
-      reason: 'Time limit reached! Winner has most kills.',
-      survivors: allPlayers.length,
-      topKills: topKills
-    });
+    if (gameCode) {
+      lobbies[gameCode].state = 'finished';
+      io.to(gameCode).emit('gameEnded', {
+        winner: gameWinner,
+        reason: 'Time limit reached! Winner has most kills.',
+        survivors: allPlayers.length,
+        topKills: topKills
+      });
+    }
     
     return true;
   }
@@ -294,6 +306,7 @@ io.on('connection', (socket) => {
   socket.on('startGame', (data) => {
     const gameCode = data.gameCode;
     const tankSpeed = data.tankSpeed || TANK_SPEED; // Default if not provided
+    const melody = data.melody || 'battle'; // Default melody
     
     if (!lobbies[gameCode] || lobbies[gameCode].host !== socket.id) {
       socket.emit('lobbyError', { message: 'Only host can start the game!' });
@@ -309,6 +322,7 @@ io.on('connection', (socket) => {
     lobbies[gameCode].state = 'playing';
     lobbies[gameCode].gameStartTime = Date.now();
     lobbies[gameCode].tankSpeed = tankSpeed; // Store tank speed setting
+    lobbies[gameCode].melody = melody; // Store melody setting
     
     // Don't create tanks here - they will be created when players connect to game page
     // with new socket IDs via initGame
@@ -320,10 +334,11 @@ io.on('connection', (socket) => {
     io.to(gameCode).emit('gameStarting', {
       startTime: gameStartTime,
       gameDuration: GAME_DURATION,
-      tankSpeed: tankSpeed
+      tankSpeed: tankSpeed,
+      melody: melody
     });
     
-    console.log(`Game ${gameCode} started by host ${socket.id} with tank speed: ${tankSpeed}`);
+    console.log(`Game ${gameCode} started by host ${socket.id} with tank speed: ${tankSpeed}, melody: ${melody}`);
   });
   
   socket.on('leaveLobby', (data) => {
@@ -398,7 +413,8 @@ io.on('connection', (socket) => {
       gameHeight: GAME_HEIGHT,
       obstacles: generatedObstacles,
       gameStartTime: gameStartTime,
-      gameDuration: GAME_DURATION
+      gameDuration: GAME_DURATION,
+      melody: lobbies[gameCode].melody || 'battle'
     });
     
     console.log(`Player ${socket.id} initialized for game ${socket.gameCode}. Total players: ${Object.keys(players).length}`);
@@ -455,20 +471,28 @@ io.on('connection', (socket) => {
   // Handle restart request
   socket.on('requestRestart', () => {
     const gameCode = socket.gameCode;
-    if (!gameCode || !lobbies[gameCode]) return;
+    if (!gameCode || !lobbies[gameCode]) {
+      console.log('No valid game code for restart');
+      return;
+    }
     
-    if (gameState === 'finished') {
+    if (gameState === 'finished' || lobbies[gameCode].state === 'finished') {
       playersReadyToRestart.add(socket.id);
-      console.log(`Player ${socket.id} ready to restart. ${playersReadyToRestart.size}/${Object.keys(players).length} ready`);
+      
+      // Count players currently in the game
+      const currentPlayers = Object.keys(players);
+      const readyPlayers = Array.from(playersReadyToRestart).filter(id => currentPlayers.includes(id));
+      
+      console.log(`Player ${socket.id} ready to restart. ${readyPlayers.length}/${currentPlayers.length} ready`);
       
       // Broadcast ready count to all players in this game
       io.to(gameCode).emit('restartProgress', {
-        ready: playersReadyToRestart.size,
-        total: Object.keys(players).length
+        ready: readyPlayers.length,
+        total: currentPlayers.length
       });
       
-      // Check if all players are ready
-      if (playersReadyToRestart.size === Object.keys(players).length) {
+      // Check if all current players are ready
+      if (readyPlayers.length >= currentPlayers.length && currentPlayers.length > 0) {
         console.log('All players ready! Restarting game...');
         
         // Reset game state
@@ -565,6 +589,10 @@ io.on('connection', (socket) => {
             players: lobbies[gameCode].players
           });
         }
+      } else if (wasInLobby && lobbies[gameCode].state === 'playing') {
+        // Player left during active game - remove from lobby players list
+        delete lobbies[gameCode].players[socket.id];
+        console.log(`Player ${socket.id} left during game. Removed from lobby players list.`);
       }
     }
     
