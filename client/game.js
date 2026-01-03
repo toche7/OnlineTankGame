@@ -276,10 +276,10 @@ socket.on('gameEnded', (data) => {
   stopBackgroundMusic();
   
   if (data.returnToLobby) {
-    // Show results briefly then return to lobby
+    // Show results briefly then return to lobby with game code
     showFinishScreen(data);
     setTimeout(() => {
-      window.location.href = '/lobby.html';
+      window.location.href = `/lobby.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
     }, 5000); // Show results for 5 seconds
   } else {
     showFinishScreen(data);
@@ -675,7 +675,7 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 });
 
 document.getElementById('closeBtn').addEventListener('click', () => {
-  window.location.href = '/lobby.html';
+  window.location.href = `/lobby.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
 });
 
 // Start game loop

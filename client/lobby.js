@@ -4,6 +4,24 @@ let currentGameCode = null;
 let isHost = false;
 let playersInLobby = {};
 
+// Check if returning from a finished game and auto-rejoin
+window.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const rejoinCode = urlParams.get('rejoin');
+  const oldSocketId = urlParams.get('oldSocketId');
+  
+  if (rejoinCode) {
+    // Wait for socket to connect before rejoining
+    socket.on('connect', () => {
+      console.log('Auto-rejoining lobby:', rejoinCode);
+      socket.emit('rejoinLobby', { gameCode: rejoinCode, oldSocketId: oldSocketId });
+      
+      // Clear the URL parameters
+      window.history.replaceState({}, document.title, '/lobby.html');
+    });
+  }
+});
+
 // DOM Elements
 const lobbyMenu = document.getElementById('lobbyMenu');
 const waitingRoom = document.getElementById('waitingRoom');

@@ -305,6 +305,44 @@ io.on('connection', (socket) => {
     console.log(`Player ${socket.id} joined game ${gameCode}`);
   });
   
+  socket.on('rejoinLobby', (data) => {
+    const gameCode = data.gameCode.toUpperCase();
+    
+    if (!lobbies[gameCode]) {
+      socket.emit('lobbyError', { message: 'Game not found!' });
+      return;
+    }
+    
+    // Check if player was the host
+    const wasHost = lobbies[gameCode].host === data.oldSocketId;
+    
+    // If old host rejoins, maintain host status
+    if (wasHost) {
+      lobbies[gameCode].host = socket.id;
+    }
+    
+    lobbies[gameCode].players[socket.id] = {
+      id: socket.id,
+      isHost: wasHost
+    };
+    
+    socket.join(gameCode);
+    socket.gameCode = gameCode;
+    
+    socket.emit('gameJoined', {
+      gameCode: gameCode,
+      players: lobbies[gameCode].players
+    });
+    
+    // Notify other players in lobby
+    socket.to(gameCode).emit('playerJoinedLobby', {
+      playerId: socket.id,
+      players: lobbies[gameCode].players
+    });
+    
+    console.log(`Player ${socket.id} rejoined game ${gameCode}${wasHost ? ' as host' : ''}`);
+  });
+  
   socket.on('startGame', (data) => {
     const gameCode = data.gameCode;
     const tankSpeed = data.tankSpeed || TANK_SPEED; // Default if not provided
