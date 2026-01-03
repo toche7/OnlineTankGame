@@ -30,6 +30,7 @@ const TANK_MAX_HEALTH = 100;
 const UPDATE_RATE = 60; // updates per second
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 const MAX_PLAYERS = 10;
+const MAX_CONCURRENT_GAMES = 5; // Maximum number of games that can run simultaneously
 
 // Game state management
 let gameStartTime = null;
@@ -167,51 +168,46 @@ class Projectile {
   }
 }
 
-// Check win conditions
-function checkWinConditions() {
-  if (gameState !== 'running') return false;
+// Check win conditions for a specific lobby
+function checkWinConditions(gameCode) {
+  if (!gameCode || !lobbies[gameCode]) return false;
   
-  // Get active game code from any player
-  const activeGameCode = Object.values(players).find(p => p.id);
-  const gameCode = activeGameCode ? Object.keys(lobbies).find(code => 
-    lobbies[code].state === 'playing'
-  ) : null;
+  const lobby = lobbies[gameCode];
+  if (lobby.state !== 'playing') return false;
   
   // Check if only 1 player alive (early win condition)
-  if (Object.keys(players).length > 1) {
-    const alivePlayers = Object.values(players).filter(p => p.isAlive);
+  if (Object.keys(lobby.gamePlayers).length > 1) {
+    const alivePlayers = Object.values(lobby.gamePlayers).filter(p => p.isAlive);
     if (alivePlayers.length === 1) {
-      gameState = 'finished';
-      gameWinner = alivePlayers[0].id;
+      lobby.state = 'waiting'; // Reset to waiting so players can start new game
+      lobby.gameWinner = alivePlayers[0].id;
       
-      if (gameCode) {
-        lobbies[gameCode].state = 'waiting'; // Reset to waiting so players can start new game
-        // Clear old player socket IDs - they will rejoin with new IDs
-        lobbies[gameCode].players = {};
-        // Keep the hostGameSocketId so we can identify the host when they rejoin
-        // Clear the game socket IDs set for next game
-        if (lobbies[gameCode].gameSocketIds) {
-          lobbies[gameCode].gameSocketIds.clear();
-        }
-        io.to(gameCode).emit('gameEnded', {
-          winner: gameWinner,
-          reason: 'Last player standing!',
-          survivors: 1,
-          topKills: alivePlayers[0].kills,
-          returnToLobby: true
-        });
+      // Clear old player socket IDs - they will rejoin with new IDs
+      lobby.players = {};
+      // Keep the hostGameSocketId so we can identify the host when they rejoin
+      // Clear the game socket IDs set for next game
+      if (lobby.gameSocketIds) {
+        lobby.gameSocketIds.clear();
       }
+      
+      io.to(gameCode).emit('gameEnded', {
+        winner: lobby.gameWinner,
+        reason: 'Last player standing!',
+        survivors: 1,
+        topKills: alivePlayers[0].kills,
+        returnToLobby: true
+      });
       
       return true;
     }
   }
   
   // Check if time limit reached (5 minutes)
-  if (gameStartTime && Date.now() - gameStartTime >= GAME_DURATION) {
-    gameState = 'finished';
+  if (lobby.gameStartTime && Date.now() - lobby.gameStartTime >= GAME_DURATION) {
+    lobby.state = 'waiting';
     
     // Find winner by most kills
-    const allPlayers = Object.values(players);
+    const allPlayers = Object.values(lobby.gamePlayers);
     let topPlayer = null;
     let topKills = -1;
     
@@ -222,25 +218,23 @@ function checkWinConditions() {
       }
     }
     
-    gameWinner = topPlayer ? topPlayer.id : null;
+    lobby.gameWinner = topPlayer ? topPlayer.id : null;
     
-    if (gameCode) {
-      lobbies[gameCode].state = 'waiting'; // Reset to waiting so players can start new game
-      // Clear old player socket IDs - they will rejoin with new IDs
-      lobbies[gameCode].players = {};
-      // Keep the hostGameSocketId so we can identify the host when they rejoin
-      // Clear the game socket IDs set for next game
-      if (lobbies[gameCode].gameSocketIds) {
-        lobbies[gameCode].gameSocketIds.clear();
-      }
-      io.to(gameCode).emit('gameEnded', {
-        winner: gameWinner,
-        reason: 'Time limit reached! Winner has most kills.',
-        survivors: allPlayers.length,
-        topKills: topKills,
-        returnToLobby: true
-      });
+    // Clear old player socket IDs - they will rejoin with new IDs
+    lobby.players = {};
+    // Keep the hostGameSocketId so we can identify the host when they rejoin
+    // Clear the game socket IDs set for next game
+    if (lobby.gameSocketIds) {
+      lobby.gameSocketIds.clear();
     }
+    
+    io.to(gameCode).emit('gameEnded', {
+      winner: lobby.gameWinner,
+      reason: 'Time limit reached! Winner has most kills.',
+      survivors: allPlayers.length,
+      topKills: topKills,
+      returnToLobby: true
+    });
     
     return true;
   }
@@ -254,6 +248,15 @@ io.on('connection', (socket) => {
   
   // Lobby event handlers
   socket.on('createGame', () => {
+    // Check if we've reached the maximum number of concurrent games
+    const activeGames = Object.values(lobbies).filter(lobby => lobby.state === 'playing').length;
+    if (activeGames >= MAX_CONCURRENT_GAMES) {
+      socket.emit('lobbyError', { 
+        message: `Server is at capacity! Maximum ${MAX_CONCURRENT_GAMES} games can run at the same time. Please wait for a game to finish.` 
+      });
+      return;
+    }
+    
     const gameCode = generateGameCode();
     lobbies[gameCode] = {
       players: {},
@@ -261,7 +264,12 @@ io.on('connection', (socket) => {
       originalHost: socket.id,
       state: 'waiting',
       gameStartTime: null,
-      gameWinner: null
+      gameWinner: null,
+      // Per-lobby game state
+      gamePlayers: {}, // In-game player tanks
+      gameProjectiles: [],
+      gameObstacles: [],
+      playersReadyToRestart: new Set()
     };
     
     lobbies[gameCode].players[socket.id] = {
@@ -396,21 +404,29 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Check if we've reached the maximum number of concurrent games
+    const activeGames = Object.values(lobbies).filter(lobby => lobby.state === 'playing').length;
+    if (activeGames >= MAX_CONCURRENT_GAMES) {
+      socket.emit('lobbyError', { 
+        message: `Server is at capacity! Maximum ${MAX_CONCURRENT_GAMES} games can run at the same time. Please try again later.` 
+      });
+      return;
+    }
+    
     // Change lobby state to playing
     lobbies[gameCode].state = 'playing';
     lobbies[gameCode].gameStartTime = Date.now();
     lobbies[gameCode].tankSpeed = tankSpeed; // Store tank speed setting
     lobbies[gameCode].melody = melody; // Store melody setting
     
-    // Don't create tanks here - they will be created when players connect to game page
-    // with new socket IDs via initGame
-    
-    gameStartTime = Date.now();
-    gameState = 'running';
+    // Initialize game state for this lobby
+    lobbies[gameCode].gameObstacles = generateObstacles();
+    lobbies[gameCode].gamePlayers = {};
+    lobbies[gameCode].gameProjectiles = [];
     
     // Notify all players in the lobby
     io.to(gameCode).emit('gameStarting', {
-      startTime: gameStartTime,
+      startTime: lobbies[gameCode].gameStartTime,
       gameDuration: GAME_DURATION,
       tankSpeed: tankSpeed,
       melody: melody
@@ -489,25 +505,26 @@ io.on('connection', (socket) => {
     }
     
     // Create new tank for player if not exists
-    if (!players[socket.id]) {
-      const tank = new Tank(socket.id, generatedObstacles);
-      players[socket.id] = tank;
+    const lobby = lobbies[gameCode];
+    if (!lobby.gamePlayers[socket.id]) {
+      const tank = new Tank(socket.id, lobby.gameObstacles);
+      lobby.gamePlayers[socket.id] = tank;
       console.log(`Created tank for player ${socket.id}, isAlive: ${tank.isAlive}`);
     }
 
     // Send initial game state to new player
     socket.emit('init', {
       playerId: socket.id,
-      players: players,
+      players: lobby.gamePlayers,
       gameWidth: GAME_WIDTH,
       gameHeight: GAME_HEIGHT,
-      obstacles: generatedObstacles,
-      gameStartTime: gameStartTime,
+      obstacles: lobby.gameObstacles,
+      gameStartTime: lobby.gameStartTime,
       gameDuration: GAME_DURATION,
       melody: lobbies[gameCode].melody || 'battle'
     });
     
-    console.log(`Player ${socket.id} initialized for game ${socket.gameCode}. Total players: ${Object.keys(players).length}`);
+    console.log(`Player ${socket.id} initialized for game ${socket.gameCode}. Total players: ${Object.keys(lobby.gamePlayers).length}`);
 
     // Notify other players of new player
     socket.to(socket.gameCode).emit('playerJoined', {
@@ -518,39 +535,50 @@ io.on('connection', (socket) => {
 
   // Handle player movement
   socket.on('move', (data) => {
-    if (players[socket.id]) {
-      if (players[socket.id].isAlive) {
-        const gameCode = socket.gameCode;
-        const speedMultiplier = (gameCode && lobbies[gameCode]) ? (lobbies[gameCode].tankSpeed / TANK_SPEED) : 1;
-        players[socket.id].velocityX = data.velocityX * speedMultiplier;
-        players[socket.id].velocityY = data.velocityY * speedMultiplier;
+    const gameCode = socket.gameCode;
+    if (!gameCode || !lobbies[gameCode]) return;
+    
+    const lobby = lobbies[gameCode];
+    if (lobby.gamePlayers[socket.id]) {
+      if (lobby.gamePlayers[socket.id].isAlive) {
+        const speedMultiplier = lobby.tankSpeed ? (lobby.tankSpeed / TANK_SPEED) : 1;
+        lobby.gamePlayers[socket.id].velocityX = data.velocityX * speedMultiplier;
+        lobby.gamePlayers[socket.id].velocityY = data.velocityY * speedMultiplier;
       } else {
         console.log(`Player ${socket.id} tried to move but isAlive is false`);
       }
     } else {
-      console.log(`Move event from ${socket.id} but player not found in players`);
+      console.log(`Move event from ${socket.id} but player not found in lobby players`);
     }
   });
 
   // Handle tank rotation
   socket.on('rotate', (data) => {
-    if (players[socket.id]) {
-      players[socket.id].rotation = data.rotation;
+    const gameCode = socket.gameCode;
+    if (!gameCode || !lobbies[gameCode]) return;
+    
+    const lobby = lobbies[gameCode];
+    if (lobby.gamePlayers[socket.id]) {
+      lobby.gamePlayers[socket.id].rotation = data.rotation;
     }
   });
 
   // Handle shooting
   socket.on('shoot', (data) => {
-    if (players[socket.id]) {
-      const tank = players[socket.id];
+    const gameCode = socket.gameCode;
+    if (!gameCode || !lobbies[gameCode]) return;
+    
+    const lobby = lobbies[gameCode];
+    if (lobby.gamePlayers[socket.id]) {
+      const tank = lobby.gamePlayers[socket.id];
       const projectile = new Projectile(
         tank.x + Math.cos(tank.rotation) * TANK_SIZE,
         tank.y + Math.sin(tank.rotation) * TANK_SIZE,
         tank.rotation,
         socket.id
       );
-      projectiles.push(projectile);
-      io.emit('projectileCreated', {
+      lobby.gameProjectiles.push(projectile);
+      io.to(gameCode).emit('projectileCreated', {
         x: projectile.x,
         y: projectile.y,
         rotation: projectile.rotation
@@ -641,9 +669,13 @@ io.on('connection', (socket) => {
     
     const gameCode = socket.gameCode;
     
-    // Remove from players
-    delete players[socket.id];
-    playersReadyToRestart.delete(socket.id);
+    // Remove from lobby game players if in a game
+    if (gameCode && lobbies[gameCode]) {
+      delete lobbies[gameCode].gamePlayers[socket.id];
+      if (lobbies[gameCode].playersReadyToRestart) {
+        lobbies[gameCode].playersReadyToRestart.delete(socket.id);
+      }
+    }
     
     // Handle lobby cleanup
     if (gameCode && lobbies[gameCode]) {
@@ -712,178 +744,183 @@ io.on('connection', (socket) => {
   });
 });
 
-// Game loop - update game state
+// Game loop - update game state for each lobby
 setInterval(() => {
-  // Skip updates if game is finished or waiting
-  if (gameState !== 'running') return;
-  
-  // Check win conditions
-  checkWinConditions();
-  if (gameState === 'finished') return;
-  // Update player positions
-  Object.keys(players).forEach(playerId => {
-    const tank = players[playerId];
-    const newX = tank.x + tank.velocityX;
-    const newY = tank.y + tank.velocityY;
+  // Process each lobby separately
+  Object.keys(lobbies).forEach(gameCode => {
+    const lobby = lobbies[gameCode];
+    
+    // Skip if not playing
+    if (lobby.state !== 'playing') return;
+    
+    // Check win conditions for this lobby
+    checkWinConditions(gameCode);
+    if (lobby.state === 'finished') return;
+    
+    // Update player positions for this lobby
+    Object.keys(lobby.gamePlayers).forEach(playerId => {
+      const tank = lobby.gamePlayers[playerId];
+      const newX = tank.x + tank.velocityX;
+      const newY = tank.y + tank.velocityY;
 
-    // Check collision with obstacles
-    let colliding = false;
-    for (let obs of generatedObstacles) {
-      if (obs.collidesWith(newX, newY, TANK_SIZE)) {
-        colliding = true;
-        break;
+      // Check collision with obstacles
+      let colliding = false;
+      for (let obs of lobby.gameObstacles) {
+        if (obs.collidesWith(newX, newY, TANK_SIZE)) {
+          colliding = true;
+          break;
+        }
       }
-    }
 
-    // Check collision with other tanks
-    if (!colliding) {
-      for (let otherPlayerId of Object.keys(players)) {
-        if (otherPlayerId !== playerId) {
-          const otherTank = players[otherPlayerId];
-          const dx = newX - otherTank.x;
-          const dy = newY - otherTank.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          // Tanks collide if distance is less than 2x tank size
-          if (distance < TANK_SIZE * 2) {
-            colliding = true;
-            break;
+      // Check collision with other tanks
+      if (!colliding) {
+        for (let otherPlayerId of Object.keys(lobby.gamePlayers)) {
+          if (otherPlayerId !== playerId) {
+            const otherTank = lobby.gamePlayers[otherPlayerId];
+            const dx = newX - otherTank.x;
+            const dy = newY - otherTank.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Tanks collide if distance is less than 2x tank size
+            if (distance < TANK_SIZE * 2) {
+              colliding = true;
+              break;
+            }
           }
         }
       }
-    }
 
-    if (!colliding) {
-      tank.x = newX;
-      tank.y = newY;
-    }
-
-    // Wrap around edges
-    if (tank.x < 0) tank.x = GAME_WIDTH;
-    if (tank.x > GAME_WIDTH) tank.x = 0;
-    if (tank.y < 0) tank.y = GAME_HEIGHT;
-    if (tank.y > GAME_HEIGHT) tank.y = 0;
-  });
-
-  // Update projectiles
-  for (let i = projectiles.length - 1; i >= 0; i--) {
-    projectiles[i].update();
-
-    if (projectiles[i].isOutOfBounds()) {
-      projectiles.splice(i, 1);
-      continue;
-    }
-
-    // Check collision with obstacles
-    let hitObstacle = false;
-    for (let obs of generatedObstacles) {
-      if (obs.collidesWith(projectiles[i].x, projectiles[i].y, PROJECTILE_SIZE)) {
-        hitObstacle = true;
-        const hitX = projectiles[i].x;
-        const hitY = projectiles[i].y;
-        projectiles.splice(i, 1);
-        io.emit('explosion', {
-          x: hitX,
-          y: hitY,
-          size: 'small'
-        });
-        break;
+      if (!colliding) {
+        tank.x = newX;
+        tank.y = newY;
       }
-    }
 
-    if (hitObstacle) continue;
+      // Wrap around edges
+      if (tank.x < 0) tank.x = GAME_WIDTH;
+      if (tank.x > GAME_WIDTH) tank.x = 0;
+      if (tank.y < 0) tank.y = GAME_HEIGHT;
+      if (tank.y > GAME_HEIGHT) tank.y = 0;
+    });
 
-    // Check collision with tanks
-    let hitTank = false;
-    Object.keys(players).forEach(playerId => {
-      if (hitTank) return; // Already hit a tank
-      
-      const tank = players[playerId];
-      const dx = projectiles[i].x - tank.x;
-      const dy = projectiles[i].y - tank.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+    // Update projectiles for this lobby
+    for (let i = lobby.gameProjectiles.length - 1; i >= 0; i--) {
+      lobby.gameProjectiles[i].update();
 
-      if (distance < TANK_SIZE + PROJECTILE_SIZE && projectiles[i].playerId !== playerId) {
-        hitTank = true;
-        const killerPlayerId = projectiles[i].playerId;
-        const hitX = projectiles[i].x;
-        const hitY = projectiles[i].y;
+      if (lobby.gameProjectiles[i].isOutOfBounds()) {
+        lobby.gameProjectiles.splice(i, 1);
+        continue;
+      }
+
+      // Check collision with obstacles
+      let hitObstacle = false;
+      for (let obs of lobby.gameObstacles) {
+        if (obs.collidesWith(lobby.gameProjectiles[i].x, lobby.gameProjectiles[i].y, PROJECTILE_SIZE)) {
+          hitObstacle = true;
+          const hitX = lobby.gameProjectiles[i].x;
+          const hitY = lobby.gameProjectiles[i].y;
+          lobby.gameProjectiles.splice(i, 1);
+          io.to(gameCode).emit('explosion', {
+            x: hitX,
+            y: hitY,
+            size: 'small'
+          });
+          break;
+        }
+      }
+
+      if (hitObstacle) continue;
+
+      // Check collision with tanks
+      let hitTank = false;
+      Object.keys(lobby.gamePlayers).forEach(playerId => {
+        if (hitTank) return; // Already hit a tank
         
-        tank.health -= 10;
-        projectiles.splice(i, 1);
+        const tank = lobby.gamePlayers[playerId];
+        const dx = lobby.gameProjectiles[i].x - tank.x;
+        const dy = lobby.gameProjectiles[i].y - tank.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Broadcast hit explosion (small)
-        io.emit('explosion', {
-          x: hitX,
-          y: hitY,
-          size: 'small'
-        });
-
-        if (tank.health <= 0) {
-          // Award points to killer
-          const killerTank = players[killerPlayerId];
-          if (killerTank) {
-            killerTank.score += 100;
-            killerTank.kills += 1;
-          }
-
-          // Decrease lives
-          tank.livesRemaining -= 1;
+        if (distance < TANK_SIZE + PROJECTILE_SIZE && lobby.gameProjectiles[i].playerId !== playerId) {
+          hitTank = true;
+          const killerPlayerId = lobby.gameProjectiles[i].playerId;
+          const hitX = lobby.gameProjectiles[i].x;
+          const hitY = lobby.gameProjectiles[i].y;
           
-          if (tank.livesRemaining <= 0) {
-            // Mark as spectating (can't move/shoot but stays visible)
-            tank.isAlive = false;
+          tank.health -= 10;
+          lobby.gameProjectiles.splice(i, 1);
+
+          // Broadcast hit explosion (small)
+          io.to(gameCode).emit('explosion', {
+            x: hitX,
+            y: hitY,
+            size: 'small'
+          });
+
+          if (tank.health <= 0) {
+            // Award points to killer
+            const killerTank = lobby.gamePlayers[killerPlayerId];
+            if (killerTank) {
+              killerTank.score += 100;
+              killerTank.kills += 1;
+            }
+
+            // Decrease lives
+            tank.livesRemaining -= 1;
             
-            io.emit('tankDestroyed', {
-              playerId: playerId,
-              livesRemaining: 0,
-              killerScore: killerTank ? killerTank.score : 0,
-              isSpectating: true
-            });
-          } else {
-            // Respawn destroyed tank at a valid location (not on obstacles)
-            tank.health = TANK_MAX_HEALTH;
-            const destroyX = tank.x;
-            const destroyY = tank.y;
-            
-            let validRespawn = false;
-            while (!validRespawn) {
-              tank.x = Math.random() * GAME_WIDTH;
-              tank.y = Math.random() * GAME_HEIGHT;
-              validRespawn = true;
+            if (tank.livesRemaining <= 0) {
+              // Mark as spectating (can't move/shoot but stays visible)
+              tank.isAlive = false;
               
-              // Check if respawn position collides with any obstacle
-              for (let obs of generatedObstacles) {
-                if (obs.collidesWith(tank.x, tank.y, TANK_SIZE)) {
-                  validRespawn = false;
-                  break;
+              io.to(gameCode).emit('tankDestroyed', {
+                playerId: playerId,
+                livesRemaining: 0,
+                killerScore: killerTank ? killerTank.score : 0,
+                isSpectating: true
+              });
+            } else {
+              // Respawn destroyed tank at a valid location (not on obstacles)
+              tank.health = TANK_MAX_HEALTH;
+              const destroyX = tank.x;
+              const destroyY = tank.y;
+              
+              let validRespawn = false;
+              while (!validRespawn) {
+                tank.x = Math.random() * GAME_WIDTH;
+                tank.y = Math.random() * GAME_HEIGHT;
+                validRespawn = true;
+                
+                // Check if respawn position collides with any obstacle
+                for (let obs of lobby.gameObstacles) {
+                  if (obs.collidesWith(tank.x, tank.y, TANK_SIZE)) {
+                    validRespawn = false;
+                    break;
+                  }
                 }
               }
+              
+              // Broadcast destruction explosion (big) at original position
+              io.to(gameCode).emit('explosion', {
+                x: destroyX,
+                y: destroyY,
+                size: 'big'
+              });
+              
+              io.to(gameCode).emit('tankDestroyed', {
+                playerId: playerId,
+                livesRemaining: tank.livesRemaining,
+                killerScore: killerTank ? killerTank.score : 0
+              });
             }
-            
-            // Broadcast destruction explosion (big) at original position
-            io.emit('explosion', {
-              x: destroyX,
-              y: destroyY,
-              size: 'big'
-            });
-            
-            io.emit('tankDestroyed', {
-              playerId: playerId,
-              livesRemaining: tank.livesRemaining,
-              killerScore: killerTank ? killerTank.score : 0
-            });
-          }
-        }
-      }
-    });
-  }
+          }        }
+      });
+    }
 
-  // Broadcast game state to all clients (includes all players - both active and spectating)
-  io.emit('gameState', {
-    players: players,
-    projectiles: projectiles.map(p => ({ x: p.x, y: p.y, rotation: p.rotation }))
-  });
+    // Broadcast game state to all clients in this lobby
+    io.to(gameCode).emit('gameState', {
+      players: lobby.gamePlayers,
+      projectiles: lobby.gameProjectiles.map(p => ({ x: p.x, y: p.y, rotation: p.rotation }))
+    });
+  }); // End of lobbies forEach
 }, 1000 / UPDATE_RATE);
 
 const PORT = 3000;
