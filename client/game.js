@@ -522,6 +522,13 @@ function gameLoop() {
 
     // Update lives display
     document.getElementById('lives').textContent = myTank.livesRemaining || 0;
+    
+    // Update ammo display if limited ammo mode
+    if (myTank.ammo !== undefined) {
+      const ammoDisplay = document.getElementById('ammoDisplay');
+      ammoDisplay.style.display = 'block';
+      document.getElementById('ammo').textContent = myTank.ammo;
+    }
 
     // Update score and kills display
     document.getElementById('score').textContent = myTank.score;

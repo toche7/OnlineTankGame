@@ -75,13 +75,15 @@ startGameBtn.addEventListener('click', () => {
     const debugMode = document.getElementById('debugMode').checked;
     const weaponsEnabled = document.getElementById('weaponsEnabled').checked;
     const powerupsEnabled = document.getElementById('powerupsEnabled').checked;
+    const limitedAmmo = document.getElementById('limitedAmmo').checked;
     socket.emit('startGame', { 
       gameCode: currentGameCode, 
       tankSpeed: tankSpeed,
       melody: melodyChoice,
       debugMode: debugMode,
       weaponsEnabled: weaponsEnabled,
-      powerupsEnabled: powerupsEnabled
+      powerupsEnabled: powerupsEnabled,
+      limitedAmmo: limitedAmmo
     });
   }
 });

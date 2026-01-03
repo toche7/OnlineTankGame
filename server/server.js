@@ -160,6 +160,8 @@ class Tank {
     this.kills = 0;
     this.livesRemaining = 3;
     this.isAlive = true; // false = spectating (can't move/shoot but visible)
+    this.ammo = 20; // Limited ammo mode
+    this.lastAmmoRegen = Date.now();
   }
 }
 
@@ -508,6 +510,7 @@ io.on('connection', (socket) => {
     lobbies[gameCode].debugMode = debugMode; // Store debug mode flag
     lobbies[gameCode].weaponsEnabled = data.weaponsEnabled !== false; // Default true
     lobbies[gameCode].powerupsEnabled = data.powerupsEnabled !== false; // Default true
+    lobbies[gameCode].limitedAmmo = data.limitedAmmo || false; // Limited ammo mode
     
     // Initialize game state for this lobby
     lobbies[gameCode].gameObstacles = generateObstacles();
@@ -677,6 +680,15 @@ io.on('connection', (socket) => {
     const lobby = lobbies[gameCode];
     if (lobby.gamePlayers[socket.id]) {
       const tank = lobby.gamePlayers[socket.id];
+      
+      // Check ammo in limited ammo mode
+      if (lobby.limitedAmmo) {
+        if (tank.ammo <= 0) {
+          return; // No ammo, can't shoot
+        }
+        tank.ammo -= 1; // Consume ammo
+      }
+      
       const weaponType = tank.activeWeapon || null;
       const projectile = new Projectile(
         tank.x + Math.cos(tank.rotation) * TANK_SIZE,
@@ -980,6 +992,14 @@ setInterval(() => {
         player.activePowerup = null;
         io.to(gameCode).emit('powerupExpired', { playerId });
       }
+      
+      // Ammo regeneration in limited ammo mode (1 bullet per 3 seconds)
+      if (lobby.limitedAmmo && player.isAlive && player.ammo < 20) {
+        if (now - player.lastAmmoRegen >= 3000) {
+          player.ammo = Math.min(20, player.ammo + 1);
+          player.lastAmmoRegen = now;
+        }
+      }
     });
     
     // Check win conditions for this lobby
@@ -1123,6 +1143,8 @@ setInterval(() => {
             } else {
               // Respawn destroyed tank at a valid location (not on obstacles)
               tank.health = TANK_MAX_HEALTH;
+              tank.ammo = 20; // Reset ammo on respawn
+              tank.lastAmmoRegen = Date.now();
               const destroyX = tank.x;
               const destroyY = tank.y;
               
