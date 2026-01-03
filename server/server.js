@@ -28,6 +28,22 @@ const PROJECTILE_SPEED = 8;
 const PROJECTILE_SIZE = 5;
 const TANK_MAX_HEALTH = 100;
 const UPDATE_RATE = 60; // updates per second
+
+// Weapon types configuration
+const WEAPON_TYPES = {
+  RAPID_FIRE: { name: 'Rapid Fire', duration: 8000, color: '#ff4444' },
+  TRIPLE_SHOT: { name: 'Triple Shot', duration: 10000, color: '#44ff44' },
+  LASER: { name: 'Laser', duration: 12000, color: '#4444ff' },
+  ROCKETS: { name: 'Rockets', duration: 15000, color: '#ff44ff' }
+};
+
+// Powerup types configuration
+const POWERUP_TYPES = {
+  SPEED_BOOST: { name: 'Speed Boost', duration: 8000, color: '#ffff44', speedMultiplier: 1.5 },
+  SHIELD: { name: 'Shield', duration: 10000, color: '#44ffff' },
+  HEALTH: { name: 'Health', color: '#44ff44', healAmount: 50 },
+  INVINCIBILITY: { name: 'Invincibility', duration: 5000, color: '#ff8844' }
+}
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 const MAX_PLAYERS = 10;
 const MAX_CONCURRENT_GAMES = 5; // Maximum number of games that can run simultaneously
@@ -489,11 +505,17 @@ io.on('connection', (socket) => {
     lobbies[gameCode].tankSpeed = tankSpeed; // Store tank speed setting
     lobbies[gameCode].melody = melody; // Store melody setting
     lobbies[gameCode].debugMode = debugMode; // Store debug mode flag
+    lobbies[gameCode].weaponsEnabled = data.weaponsEnabled !== false; // Default true
+    lobbies[gameCode].powerupsEnabled = data.powerupsEnabled !== false; // Default true
     
     // Initialize game state for this lobby
     lobbies[gameCode].gameObstacles = generateObstacles();
     lobbies[gameCode].gamePlayers = {};
     lobbies[gameCode].gameProjectiles = [];
+    lobbies[gameCode].gameWeapons = []; // Special weapon pickups
+    lobbies[gameCode].gamePowerups = []; // Power-up pickups
+    lobbies[gameCode].lastWeaponSpawn = Date.now();
+    lobbies[gameCode].lastPowerupSpawn = Date.now();
     
     // Notify all players in the lobby
     io.to(gameCode).emit('gameStarting', {
@@ -506,7 +528,13 @@ io.on('connection', (socket) => {
     // Broadcast lobby status update
     broadcastLobbyStatus();
     
-    console.log(`Game ${gameCode} started by host ${socket.id} with tank speed: ${tankSpeed}, melody: ${melody}, debug mode: ${debugMode || false}`);
+    console.log(`Game ${gameCode} started with settings:`, {
+      tankSpeed,
+      melody,
+      debugMode: debugMode || false,
+      weapons: lobbies[gameCode].weaponsEnabled,
+      powerups: lobbies[gameCode].powerupsEnabled
+    });
   });
   
   socket.on('leaveLobby', (data) => {
@@ -594,6 +622,8 @@ io.on('connection', (socket) => {
       gameWidth: GAME_WIDTH,
       gameHeight: GAME_HEIGHT,
       obstacles: lobby.gameObstacles,
+      weapons: lobby.gameWeapons || [],
+      powerups: lobby.gamePowerups || [],
       gameStartTime: lobby.gameStartTime,
       gameDuration: GAME_DURATION,
       melody: lobbies[gameCode].melody || 'battle'
@@ -604,7 +634,7 @@ io.on('connection', (socket) => {
     // Notify other players of new player
     socket.to(socket.gameCode).emit('playerJoined', {
       playerId: socket.id,
-      tank: players[socket.id]
+      tank: lobby.gamePlayers[socket.id]
     });
   });
 
@@ -819,6 +849,52 @@ io.on('connection', (socket) => {
   });
 });
 
+// Spawn weapon pickup
+function spawnWeapon(gameCode) {
+  const lobby = lobbies[gameCode];
+  if (!lobby || !lobby.weaponsEnabled) return;
+  
+  const weaponTypes = Object.keys(WEAPON_TYPES);
+  const randomType = weaponTypes[Math.floor(Math.random() * weaponTypes.length)];
+  const weaponInfo = WEAPON_TYPES[randomType];
+  
+  const weapon = {
+    id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+    type: randomType,
+    x: Math.random() * (GAME_WIDTH - 60) + 30,
+    y: Math.random() * (GAME_HEIGHT - 60) + 30,
+    size: 25,
+    color: weaponInfo.color,
+    name: weaponInfo.name
+  };
+  
+  lobby.gameWeapons.push(weapon);
+  io.to(gameCode).emit('weaponSpawned', weapon);
+}
+
+// Spawn powerup pickup
+function spawnPowerup(gameCode) {
+  const lobby = lobbies[gameCode];
+  if (!lobby || !lobby.powerupsEnabled) return;
+  
+  const powerupTypes = Object.keys(POWERUP_TYPES);
+  const randomType = powerupTypes[Math.floor(Math.random() * powerupTypes.length)];
+  const powerupInfo = POWERUP_TYPES[randomType];
+  
+  const powerup = {
+    id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+    type: randomType,
+    x: Math.random() * (GAME_WIDTH - 60) + 30,
+    y: Math.random() * (GAME_HEIGHT - 60) + 30,
+    size: 20,
+    color: powerupInfo.color,
+    name: powerupInfo.name
+  };
+  
+  lobby.gamePowerups.push(powerup);
+  io.to(gameCode).emit('powerupSpawned', powerup);
+}
+
 // Game loop - update game state for each lobby
 setInterval(() => {
   // Process each lobby separately
@@ -827,6 +903,80 @@ setInterval(() => {
     
     // Skip if not playing
     if (lobby.state !== 'playing') return;
+    
+    const now = Date.now();
+    
+    // Spawn weapons every 15-25 seconds
+    if (lobby.weaponsEnabled && lobby.lastWeaponSpawn && now - lobby.lastWeaponSpawn > 15000 + Math.random() * 10000) {
+      if (lobby.gameWeapons && lobby.gameWeapons.length < 3) {
+        spawnWeapon(gameCode);
+        lobby.lastWeaponSpawn = now;
+      }
+    }
+    
+    // Spawn powerups every 10-20 seconds  
+    if (lobby.powerupsEnabled && lobby.lastPowerupSpawn && now - lobby.lastPowerupSpawn > 10000 + Math.random() * 10000) {
+      if (lobby.gamePowerups && lobby.gamePowerups.length < 4) {
+        spawnPowerup(gameCode);
+        lobby.lastPowerupSpawn = now;
+      }
+    }
+    
+    // Check for pickups
+    Object.keys(lobby.gamePlayers).forEach(playerId => {
+      const player = lobby.gamePlayers[playerId];
+      if (!player.isAlive) return;
+      
+      // Check weapon collision
+      if (lobby.gameWeapons) {
+        for (let i = lobby.gameWeapons.length - 1; i >= 0; i--) {
+          const weapon = lobby.gameWeapons[i];
+          const dx = player.x - weapon.x;
+          const dy = player.y - weapon.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < TANK_SIZE + weapon.size) {
+            player.activeWeapon = weapon.type;
+            player.weaponEndTime = now + WEAPON_TYPES[weapon.type].duration;
+            lobby.gameWeapons.splice(i, 1);
+            io.to(gameCode).emit('weaponPickup', { playerId, weapon: weapon.type });
+            break;
+          }
+        }
+      }
+      
+      // Check powerup collision
+      if (lobby.gamePowerups) {
+        for (let i = lobby.gamePowerups.length - 1; i >= 0; i--) {
+          const powerup = lobby.gamePowerups[i];
+          const dx = player.x - powerup.x;
+          const dy = player.y - powerup.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < TANK_SIZE + powerup.size) {
+            if (powerup.type === 'HEALTH') {
+              player.health = Math.min(TANK_MAX_HEALTH, player.health + POWERUP_TYPES.HEALTH.healAmount);
+            } else {
+              player.activePowerup = powerup.type;
+              player.powerupEndTime = now + POWERUP_TYPES[powerup.type].duration;
+            }
+            lobby.gamePowerups.splice(i, 1);
+            io.to(gameCode).emit('powerupPickup', { playerId, powerup: powerup.type });
+            break;
+          }
+        }
+      }
+      
+      // Clear expired effects
+      if (player.activeWeapon && player.weaponEndTime && now > player.weaponEndTime) {
+        player.activeWeapon = null;
+        io.to(gameCode).emit('weaponExpired', { playerId });
+      }
+      if (player.activePowerup && player.powerupEndTime && now > player.powerupEndTime) {
+        player.activePowerup = null;
+        io.to(gameCode).emit('powerupExpired', { playerId });
+      }
+    });
     
     // Check win conditions for this lobby
     checkWinConditions(gameCode);
@@ -995,7 +1145,9 @@ setInterval(() => {
     // Broadcast game state to all clients in this lobby
     io.to(gameCode).emit('gameState', {
       players: lobby.gamePlayers,
-      projectiles: lobby.gameProjectiles.map(p => ({ x: p.x, y: p.y, rotation: p.rotation }))
+      projectiles: lobby.gameProjectiles.map(p => ({ x: p.x, y: p.y, rotation: p.rotation })),
+      weapons: lobby.gameWeapons,
+      powerups: lobby.gamePowerups
     });
   }); // End of lobbies forEach
 }, 1000 / UPDATE_RATE);

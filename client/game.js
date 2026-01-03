@@ -20,6 +20,8 @@ let gameState = {
   gameHeight: 600,
   explosions: [],
   obstacles: [],
+  weapons: [],
+  powerups: [],
   gameStartTime: null,
   gameDuration: null,
   gameFinished: false
@@ -215,6 +217,8 @@ socket.on('init', (data) => {
   gameState.gameWidth = data.gameWidth;
   gameState.gameHeight = data.gameHeight;
   gameState.obstacles = data.obstacles || [];
+  gameState.weapons = data.weapons || [];
+  gameState.powerups = data.powerups || [];
   gameState.gameStartTime = data.gameStartTime;
   gameState.gameDuration = data.gameDuration;
   selectedMelody = data.melody || 'battle';
@@ -292,6 +296,8 @@ socket.on('gameEnded', (data) => {
 socket.on('gameState', (data) => {
   gameState.players = data.players;
   gameState.projectiles = data.projectiles;
+  gameState.weapons = data.weapons || [];
+  gameState.powerups = data.powerups || [];
 });
 
 socket.on('projectileCreated', (data) => {
@@ -317,6 +323,54 @@ socket.on('explosion', (data) => {
   // Play explosion sound effect (Web Audio API)
   playExplosionSound(data.size);
 });
+
+socket.on('weaponPickup', (data) => {
+  console.log(`Player ${data.playerId} picked up weapon: ${data.weapon}`);
+  // Show notification
+  if (data.playerId === gameState.playerId) {
+    showNotification(`Picked up ${data.weapon.replace('_', ' ')}!`, '#ff6b6b');
+  }
+});
+
+socket.on('powerupPickup', (data) => {
+  console.log(`Player ${data.playerId} picked up powerup: ${data.powerup}`);
+  // Show notification
+  if (data.playerId === gameState.playerId) {
+    showNotification(`Picked up ${data.powerup.replace('_', ' ')}!`, '#4ecdc4');
+  }
+});
+
+socket.on('weaponExpired', (data) => {
+  if (data.playerId === gameState.playerId) {
+    showNotification('Weapon expired', '#999');
+  }
+});
+
+socket.on('powerupExpired', (data) => {
+  if (data.playerId === gameState.playerId) {
+    showNotification('Power-up expired', '#999');
+  }
+});
+
+function showNotification(message, color) {
+  const notification = document.createElement('div');
+  notification.textContent = message;
+  notification.style.cssText = `
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: ${color};
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-weight: bold;
+    z-index: 1000;
+    animation: fadeOut 2s forwards;
+  `;
+  document.body.appendChild(notification);
+  setTimeout(() => notification.remove(), 2000);
+}
 
 // Keyboard input
 document.addEventListener('keydown', (e) => {
@@ -497,6 +551,20 @@ function gameLoop() {
     drawObstacle(obstacle);
   });
 
+  // Draw weapons
+  if (gameState.weapons) {
+    gameState.weapons.forEach(weapon => {
+      drawWeapon(weapon);
+    });
+  }
+
+  // Draw powerups
+  if (gameState.powerups) {
+    gameState.powerups.forEach(powerup => {
+      drawPowerup(powerup);
+    });
+  }
+
   // Draw all tanks
   Object.keys(gameState.players).forEach(playerId => {
     const tank = gameState.players[playerId];
@@ -601,6 +669,70 @@ function drawObstacle(obstacle) {
   ctx.strokeStyle = '#888';
   ctx.lineWidth = 2;
   ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+}
+
+function drawWeapon(weapon) {
+  // Draw weapon pickup
+  ctx.save();
+  ctx.translate(weapon.x, weapon.y);
+  
+  // Pulsing effect
+  const pulse = Math.sin(Date.now() / 200) * 0.2 + 1;
+  ctx.scale(pulse, pulse);
+  
+  // Draw glow
+  ctx.shadowBlur = 15;
+  ctx.shadowColor = weapon.color;
+  
+  // Draw weapon icon
+  ctx.fillStyle = weapon.color;
+  ctx.beginPath();
+  ctx.arc(0, 0, weapon.size, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Draw weapon symbol
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 16px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🎯', 0, 0);
+  
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawPowerup(powerup) {
+  // Draw powerup pickup
+  ctx.save();
+  ctx.translate(powerup.x, powerup.y);
+  
+  // Rotation effect
+  const rotation = (Date.now() / 1000) % (Math.PI * 2);
+  ctx.rotate(rotation);
+  
+  // Draw glow
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = powerup.color;
+  
+  // Draw powerup icon
+  ctx.fillStyle = powerup.color;
+  ctx.beginPath();
+  ctx.moveTo(0, -powerup.size);
+  ctx.lineTo(powerup.size * 0.7, powerup.size * 0.7);
+  ctx.lineTo(-powerup.size, 0);
+  ctx.lineTo(powerup.size * 0.7, -powerup.size * 0.7);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Draw powerup symbol
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('⚡', 0, 0);
+  
+  ctx.shadowBlur = 0;
+  ctx.restore();
 }
 
 function updatePlayerCount() {

@@ -73,11 +73,15 @@ startGameBtn.addEventListener('click', () => {
     const tankSpeed = parseInt(document.getElementById('tankSpeed').value);
     const melodyChoice = document.getElementById('melodyChoice').value;
     const debugMode = document.getElementById('debugMode').checked;
+    const weaponsEnabled = document.getElementById('weaponsEnabled').checked;
+    const powerupsEnabled = document.getElementById('powerupsEnabled').checked;
     socket.emit('startGame', { 
       gameCode: currentGameCode, 
       tankSpeed: tankSpeed,
       melody: melodyChoice,
-      debugMode: debugMode
+      debugMode: debugMode,
+      weaponsEnabled: weaponsEnabled,
+      powerupsEnabled: powerupsEnabled
     });
   }
 });
@@ -166,10 +170,11 @@ socket.on('playerLeftLobby', (data) => {
 });
 
 socket.on('gameStarting', (data) => {
-  showStatus('Game starting in 3 seconds...');
+  showStatus('Game starting...');
+  // Give server time to fully initialize game state before navigating
   setTimeout(() => {
     window.location.href = `/game.html?code=${currentGameCode}&wasHost=${isHost}`;
-  }, 3000);
+  }, 500);
 });
 
 socket.on('lobbyError', (data) => {
