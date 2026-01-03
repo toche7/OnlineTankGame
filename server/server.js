@@ -198,6 +198,9 @@ function checkWinConditions(gameCode) {
         returnToLobby: true
       });
       
+      // Broadcast lobby status update
+      broadcastLobbyStatus();
+      
       return true;
     }
   }
@@ -236,15 +239,54 @@ function checkWinConditions(gameCode) {
       returnToLobby: true
     });
     
+    // Broadcast lobby status update
+    broadcastLobbyStatus();
+    
     return true;
   }
   
   return false;
 }
 
+// Broadcast lobby status to all clients
+function broadcastLobbyStatus() {
+  const playingGames = Object.values(lobbies).filter(l => l.state === 'playing').length;
+  const waitingRooms = Object.values(lobbies).filter(l => l.state === 'waiting').length;
+  
+  const lobbiesList = Object.keys(lobbies).map(code => ({
+    code: code,
+    state: lobbies[code].state,
+    playerCount: Object.keys(lobbies[code].players).length
+  }));
+  
+  io.emit('lobbyStatus', {
+    playing: playingGames,
+    waiting: waitingRooms,
+    lobbies: lobbiesList
+  });
+}
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
+  
+  // Send lobby status when requested
+  socket.on('requestLobbyStatus', () => {
+    const playingGames = Object.values(lobbies).filter(l => l.state === 'playing').length;
+    const waitingRooms = Object.values(lobbies).filter(l => l.state === 'waiting').length;
+    
+    const lobbiesList = Object.keys(lobbies).map(code => ({
+      code: code,
+      state: lobbies[code].state,
+      playerCount: Object.keys(lobbies[code].players).length
+    }));
+    
+    socket.emit('lobbyStatus', {
+      playing: playingGames,
+      waiting: waitingRooms,
+      lobbies: lobbiesList
+    });
+  });
   
   // Lobby event handlers
   socket.on('createGame', () => {
@@ -284,6 +326,9 @@ io.on('connection', (socket) => {
       gameCode: gameCode,
       players: lobbies[gameCode].players
     });
+    
+    // Broadcast lobby status update to all connected clients
+    broadcastLobbyStatus();
     
     console.log(`Game ${gameCode} created by ${socket.id}`);
   });
@@ -432,6 +477,9 @@ io.on('connection', (socket) => {
       melody: melody
     });
     
+    // Broadcast lobby status update
+    broadcastLobbyStatus();
+    
     console.log(`Game ${gameCode} started by host ${socket.id} with tank speed: ${tankSpeed}, melody: ${melody}`);
   });
   
@@ -448,6 +496,7 @@ io.on('connection', (socket) => {
       // Delete lobby if empty
       delete lobbies[gameCode];
       console.log(`Lobby ${gameCode} deleted (empty)`);
+      broadcastLobbyStatus();
     } else if (wasHost) {
       // Assign new host
       const newHost = Object.keys(lobbies[gameCode].players)[0];

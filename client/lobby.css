@@ -327,6 +327,104 @@ h4 {
   border-bottom: none;
 }
 
+/* Server Status Styles */
+.server-status {
+  background: rgba(76, 175, 80, 0.1);
+  border: 2px solid #4CAF50;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 30px;
+}
+
+.server-status h3 {
+  margin: 0 0 15px 0;
+  color: #4CAF50;
+  text-align: center;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.status-item {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.status-label {
+  display: block;
+  font-size: 0.9rem;
+  color: #90caf9;
+  margin-bottom: 5px;
+}
+
+.status-value {
+  display: block;
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #ffeb3b;
+}
+
+.active-games-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 15px;
+}
+
+.game-item {
+  background: rgba(0, 0, 0, 0.4);
+  border-left: 4px solid #2196F3;
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.game-item.waiting {
+  border-left-color: #ffeb3b;
+}
+
+.game-item.playing {
+  border-left-color: #4CAF50;
+}
+
+.game-item-info {
+  flex: 1;
+}
+
+.game-item-code {
+  font-weight: bold;
+  color: #ffeb3b;
+  font-size: 1.1rem;
+}
+
+.game-item-status {
+  font-size: 0.85rem;
+  color: #90caf9;
+  margin-top: 4px;
+}
+
+.game-item-badge {
+  background: rgba(76, 175, 80, 0.3);
+  color: #4CAF50;
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.game-item-badge.waiting {
+  background: rgba(255, 235, 59, 0.3);
+  color: #ffeb3b;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   h1 {

@@ -58,6 +58,22 @@
         </div>
         
         <div id="lobbyMenu" class="lobby-menu">
+          <!-- Active Games Display -->
+          <div class="server-status">
+            <h3>🎮 Server Status</h3>
+            <div class="status-grid">
+              <div class="status-item">
+                <span class="status-label">Games Playing:</span>
+                <span id="gamesPlaying" class="status-value">0</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Rooms Waiting:</span>
+                <span id="roomsWaiting" class="status-value">0</span>
+              </div>
+            </div>
+            <div id="activeGamesList" class="active-games-list"></div>
+          </div>
+          
           <button id="createGameBtn" class="btn btn-large btn-primary">Create New Game</button>
           <div class="divider">OR</div>
           <div class="join-section">

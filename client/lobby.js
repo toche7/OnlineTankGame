@@ -19,8 +19,20 @@ window.addEventListener('DOMContentLoaded', () => {
       // Clear the URL parameters
       window.history.replaceState({}, document.title, '/lobby.html');
     });
+  } else {
+    // Request lobby status when page loads
+    socket.on('connect', () => {
+      socket.emit('requestLobbyStatus');
+    });
   }
 });
+
+// Request lobby status every 5 seconds when on main menu
+setInterval(() => {
+  if (lobbyMenu && !lobbyMenu.classList.contains('hidden')) {
+    socket.emit('requestLobbyStatus');
+  }
+}, 5000);
 
 // DOM Elements
 const lobbyMenu = document.getElementById('lobbyMenu');
@@ -222,6 +234,36 @@ function showStatus(message) {
     statusMessage.classList.add('hidden');
   }, 3000);
 }
+
+// Handle lobby status updates
+socket.on('lobbyStatus', (data) => {
+  document.getElementById('gamesPlaying').textContent = data.playing;
+  document.getElementById('roomsWaiting').textContent = data.waiting;
+  
+  const activeGamesList = document.getElementById('activeGamesList');
+  activeGamesList.innerHTML = '';
+  
+  if (data.lobbies && data.lobbies.length > 0) {
+    data.lobbies.forEach(lobby => {
+      const gameItem = document.createElement('div');
+      gameItem.className = `game-item ${lobby.state}`;
+      
+      gameItem.innerHTML = `
+        <div class="game-item-info">
+          <div class="game-item-code">${lobby.code}</div>
+          <div class="game-item-status">${lobby.playerCount} player${lobby.playerCount !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="game-item-badge ${lobby.state}">
+          ${lobby.state === 'playing' ? '🎮 Playing' : '⏳ Waiting'}
+        </div>
+      `;
+      
+      activeGamesList.appendChild(gameItem);
+    });
+  } else {
+    activeGamesList.innerHTML = '<p style="text-align: center; color: #90caf9; padding: 10px;">No active games</p>';
+  }
+});
 
 // Allow Enter key to join game
 gameCodeInput.addEventListener('keypress', (e) => {
