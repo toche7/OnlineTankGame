@@ -35,6 +35,7 @@ const MAX_PLAYERS = 10;
 let gameStartTime = null;
 let gameState = 'waiting'; // 'waiting', 'running', 'finished'
 let gameWinner = null;
+const playersReadyToRestart = new Set(); // Track which players are ready to restart
 
 // Obstacle class
 class Obstacle {
@@ -215,29 +216,12 @@ io.on('connection', (socket) => {
   const tank = new Tank(socket.id, generatedObstacles);
   players[socket.id] = tank;
 
-  // Reset game if it was finished and we're starting fresh
+  // If game is finished, mark this player as not ready yet
   if (gameState === 'finished') {
-    gameState = 'waiting';
-    gameStartTime = null;
-    gameWinner = null;
-    projectiles.length = 0;
-    
-    // Reset all existing players' status for the new game
-    Object.values(players).forEach(player => {
-      player.isAlive = true;
-      player.health = TANK_MAX_HEALTH;
-      player.score = 0;
-      player.kills = 0;
-      player.livesRemaining = 3;
-      player.velocityX = 0;
-      player.velocityY = 0;
-    });
-    
-    console.log('Game reset from finished state');
-  }
-
-  // Start game if first player joins (only if not already running)
-  if (Object.keys(players).length === 1 && gameState === 'waiting') {
+    // Don't auto-restart, wait for all players to be ready
+    console.log(`Player ${socket.id} joined during finished game. Waiting for restart confirmation.`);
+  } else if (Object.keys(players).length === 1 && gameState === 'waiting') {
+    // Start game if first player joins (only if not already running or finished)
     gameStartTime = Date.now();
     gameState = 'running';
     io.emit('gameStarted', {
@@ -300,10 +284,75 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle restart request
+  socket.on('requestRestart', () => {
+    if (gameState === 'finished') {
+      playersReadyToRestart.add(socket.id);
+      console.log(`Player ${socket.id} ready to restart. ${playersReadyToRestart.size}/${Object.keys(players).length} ready`);
+      
+      // Broadcast ready count to all players
+      io.emit('restartProgress', {
+        ready: playersReadyToRestart.size,
+        total: Object.keys(players).length
+      });
+      
+      // Check if all players are ready
+      if (playersReadyToRestart.size === Object.keys(players).length) {
+        console.log('All players ready! Restarting game...');
+        
+        // Reset game state
+        gameState = 'waiting';
+        gameStartTime = null;
+        gameWinner = null;
+        projectiles.length = 0;
+        playersReadyToRestart.clear();
+        
+        // Reset all players' status for the new game
+        Object.values(players).forEach(player => {
+          player.isAlive = true;
+          player.health = TANK_MAX_HEALTH;
+          player.score = 0;
+          player.kills = 0;
+          player.livesRemaining = 3;
+          player.velocityX = 0;
+          player.velocityY = 0;
+          
+          // Respawn at random valid location
+          let validSpawn = false;
+          while (!validSpawn) {
+            player.x = Math.random() * GAME_WIDTH;
+            player.y = Math.random() * GAME_HEIGHT;
+            validSpawn = true;
+            
+            for (let obs of generatedObstacles) {
+              if (obs.collidesWith(player.x, player.y, TANK_SIZE)) {
+                validSpawn = false;
+                break;
+              }
+            }
+          }
+        });
+        
+        // Start new game
+        gameStartTime = Date.now();
+        gameState = 'running';
+        
+        // Send updated game state with reset players to all clients
+        io.emit('gameStarted', {
+          startTime: gameStartTime,
+          gameDuration: GAME_DURATION,
+          players: players // Send updated player data
+        });
+        console.log('New game started!');
+      }
+    }
+  });
+
   // Handle player disconnect
   socket.on('disconnect', () => {
     console.log('Player disconnected:', socket.id);
     delete players[socket.id];
+    playersReadyToRestart.delete(socket.id);
     socket.broadcast.emit('playerLeft', { playerId: socket.id });
     
     // Reset game if all players disconnect
@@ -312,6 +361,7 @@ io.on('connection', (socket) => {
       gameStartTime = null;
       gameWinner = null;
       projectiles.length = 0;
+      playersReadyToRestart.clear();
       console.log('All players disconnected. Game reset.');
     }
   });
@@ -319,10 +369,11 @@ io.on('connection', (socket) => {
 
 // Game loop - update game state
 setInterval(() => {
-  // Check win conditions first
-  checkWinConditions();
+  // Skip updates if game is finished or waiting
+  if (gameState !== 'running') return;
   
-  // Skip updates if game is finished
+  // Check win conditions
+  checkWinConditions();
   if (gameState === 'finished') return;
   // Update player positions
   Object.keys(players).forEach(playerId => {

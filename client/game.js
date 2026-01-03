@@ -165,14 +165,33 @@ socket.on('gameStarted', (data) => {
   gameState.gameDuration = data.gameDuration;
   gameState.gameFinished = false;
   
+  // Update players with reset data if provided
+  if (data.players) {
+    gameState.players = data.players;
+  }
+  
   // Hide finish screen if visible
   const finishScreen = document.getElementById('finishScreen');
   if (finishScreen) {
     finishScreen.classList.add('hidden');
   }
   
+  // Re-enable restart button for next game
+  const restartBtn = document.getElementById('restartBtn');
+  if (restartBtn) {
+    restartBtn.textContent = 'Restart Game';
+    restartBtn.disabled = false;
+  }
+  
   updatePlayerCount();
   console.log('Game started!', 'Players:', Object.keys(gameState.players).length);
+});
+
+socket.on('restartProgress', (data) => {
+  const restartBtn = document.getElementById('restartBtn');
+  if (restartBtn) {
+    restartBtn.textContent = `Waiting... (${data.ready}/${data.total} ready)`;
+  }
 });
 
 socket.on('gameEnded', (data) => {
@@ -543,7 +562,9 @@ function showFinishScreen(data) {
 
 // Setup finish screen button handlers
 document.getElementById('restartBtn').addEventListener('click', () => {
-  location.reload();
+  socket.emit('requestRestart');
+  document.getElementById('restartBtn').textContent = 'Waiting for other players...';
+  document.getElementById('restartBtn').disabled = true;
 });
 
 document.getElementById('closeBtn').addEventListener('click', () => {
