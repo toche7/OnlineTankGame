@@ -4,6 +4,28 @@ const socket = io();
 let playerId = localStorage.getItem('tankGamePlayerId');
 let username = localStorage.getItem('tankGameUsername');
 
+// Check if coming from a game (for rejoin)
+const urlParams = new URLSearchParams(window.location.search);
+const gameCode = urlParams.get('gameCode');
+const oldSocketId = urlParams.get('oldSocketId');
+
+// Setup back button with rejoin if coming from game
+window.addEventListener('DOMContentLoaded', () => {
+  const backBtn = document.getElementById('backToLobby');
+  if (backBtn) {
+    backBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (gameCode && oldSocketId) {
+        // Rejoin the game lobby
+        window.location.href = `/lobby.html?rejoin=${gameCode}&oldSocketId=${oldSocketId}`;
+      } else {
+        // Just go to lobby
+        window.location.href = '/lobby.html';
+      }
+    });
+  }
+});
+
 // Load personal stats and leaderboard
 function loadStats() {
   socket.emit('getPersonalStats', { playerId });

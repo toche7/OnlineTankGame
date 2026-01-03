@@ -4,26 +4,26 @@
       "id": "player_1767450407335_gwxid4sj0",
       "username": "AKE",
       "stats": {
-        "gamesPlayed": 2,
-        "wins": 2,
-        "kills": 6,
-        "deaths": 0,
-        "totalScore": 600,
+        "gamesPlayed": 8,
+        "wins": 7,
+        "kills": 21,
+        "deaths": 4,
+        "totalScore": 2100,
         "highestKills": 3,
-        "lastPlayed": 1767481798384
+        "lastPlayed": 1767482501090
       }
     },
     "player_1767450402290_j3799x19l": {
       "id": "player_1767450402290_j3799x19l",
       "username": "JJib",
       "stats": {
-        "gamesPlayed": 2,
+        "gamesPlayed": 7,
         "wins": 0,
         "kills": 0,
-        "deaths": 8,
+        "deaths": 28,
         "totalScore": 0,
         "highestKills": 0,
-        "lastPlayed": 1767481798383
+        "lastPlayed": 1767482501089
       }
     }
   }

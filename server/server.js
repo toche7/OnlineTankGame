@@ -832,14 +832,18 @@ io.on('connection', (socket) => {
     console.log(`Old socket ID: ${data.oldSocketId}`);
     console.log(`Player ID: ${data.playerId}`);
     console.log(`Current hostGameSocketId: ${lobbies[gameCode].hostGameSocketId}`);
+    console.log(`Current hostGamePlayerId: ${lobbies[gameCode].hostGamePlayerId}`);
     console.log(`Current originalHost: ${lobbies[gameCode].originalHost}`);
     console.log(`Current originalHostPlayerId: ${lobbies[gameCode].originalHostPlayerId}`);
     console.log(`Current host: ${lobbies[gameCode].host}`);
     console.log(`Current players:`, Object.keys(lobbies[gameCode].players));
     
     // Check if this player was the host by comparing their persistent player ID
-    const wasHost = data.playerId && 
-                    lobbies[gameCode].originalHostPlayerId === data.playerId;
+    // Check both originalHostPlayerId (lobby creation) and hostGamePlayerId (last game host)
+    const wasHost = data.playerId && (
+      lobbies[gameCode].originalHostPlayerId === data.playerId ||
+      lobbies[gameCode].hostGamePlayerId === data.playerId
+    );
     
     console.log(`Was this player the host? ${wasHost}`);
     
@@ -859,17 +863,19 @@ io.on('connection', (socket) => {
       lobbies[gameCode].host = socket.id;
       lobbies[gameCode].originalHost = socket.id;
       lobbies[gameCode].hostGameSocketId = null; // Reset for next game
+      lobbies[gameCode].hostGamePlayerId = null; // Reset for next game
       console.log(`Original host ${socket.id} reclaimed host status in lobby ${gameCode}`);
-    } else if (Object.keys(lobbies[gameCode].players).length === 0 && !lobbies[gameCode].hostGameSocketId) {
-      // Only assign host to first rejoiner if there's NO hostGameSocketId set
+    } else if (Object.keys(lobbies[gameCode].players).length === 0 && !lobbies[gameCode].hostGamePlayerId) {
+      // Only assign host to first rejoiner if there's NO hostGamePlayerId set
       // (meaning no one was ever the host in the game)
       lobbies[gameCode].host = socket.id;
       lobbies[gameCode].originalHost = socket.id;
+      lobbies[gameCode].originalHostPlayerId = data.playerId; // Update for future rejoins
       console.log(`First player ${socket.id} rejoining empty lobby ${gameCode}, assigning as host`);
-    } else if (Object.keys(lobbies[gameCode].players).length === 0 && lobbies[gameCode].hostGameSocketId) {
-      // If lobby is empty but hostGameSocketId exists, keep waiting for the original host
+    } else if (Object.keys(lobbies[gameCode].players).length === 0 && lobbies[gameCode].hostGamePlayerId) {
+      // If lobby is empty but hostGamePlayerId exists, keep waiting for the original host
       // Don't assign anyone as host yet
-      console.log(`Lobby ${gameCode} waiting for original host (hostGameSocketId: ${lobbies[gameCode].hostGameSocketId}) to rejoin`);
+      console.log(`Lobby ${gameCode} waiting for original host (playerId: ${lobbies[gameCode].hostGamePlayerId}) to rejoin`);
     }
     
     const isHost = lobbies[gameCode].host === socket.id;
@@ -1058,7 +1064,8 @@ io.on('connection', (socket) => {
     // Track if this player was the original host from the lobby
     if (data.wasHost && !lobbies[gameCode].hostGameSocketId) {
       lobbies[gameCode].hostGameSocketId = socket.id;
-      console.log(`Host game socket ID set to ${socket.id} (was lobby host)`);
+      lobbies[gameCode].hostGamePlayerId = persistentPlayerId; // Store persistent player ID
+      console.log(`Host game socket ID set to ${socket.id}, playerId: ${persistentPlayerId} (was lobby host)`);
     }
     
     // Create new tank for player if not exists

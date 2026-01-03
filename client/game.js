@@ -1008,6 +1008,11 @@ function showFinishScreen(data) {
 }
 
 // Setup finish screen button handlers
+document.getElementById('statsLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  window.location.href = `/stats.html?gameCode=${gameCode}&oldSocketId=${socket.id}`;
+});
+
 document.getElementById('restartBtn').addEventListener('click', () => {
   socket.emit('requestRestart');
   document.getElementById('restartBtn').textContent = 'Waiting for other players...';
