@@ -17,13 +17,26 @@
       "id": "player_1767450402290_j3799x19l",
       "username": "JJib",
       "stats": {
-        "gamesPlayed": 7,
+        "gamesPlayed": 10,
+        "wins": 1,
+        "kills": 6,
+        "deaths": 38,
+        "totalScore": 600,
+        "highestKills": 4,
+        "lastPlayed": 1767482913888
+      }
+    },
+    "player_1767447822998_1di9snr4r": {
+      "id": "player_1767447822998_1di9snr4r",
+      "username": "Player_176744",
+      "stats": {
+        "gamesPlayed": 0,
         "wins": 0,
         "kills": 0,
-        "deaths": 28,
+        "deaths": 0,
         "totalScore": 0,
         "highestKills": 0,
-        "lastPlayed": 1767482501089
+        "lastPlayed": 1767482999757
       }
     }
   }

@@ -740,6 +740,22 @@ function drawTank(tank, isPlayer) {
   ctx.fillStyle = healthPercent > 0.5 ? '#00ff00' : healthPercent > 0.25 ? '#ffff00' : '#ff0000';
   ctx.fillRect(x - TANK_SIZE, y + TANK_SIZE + 5, TANK_SIZE * 2 * healthPercent, 5);
   
+  // Draw player name above tank (but not for AI or spectating)
+  if (!isAI && !isSpectating) {
+    ctx.globalAlpha = 1;
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isPlayer ? '#00ff00' : '#ffffff';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 3;
+    
+    const displayName = isPlayer ? 'You' : (tank.username || 'Player');
+    
+    // Draw text outline for better visibility
+    ctx.strokeText(displayName, x, y - TANK_SIZE - 8);
+    ctx.fillText(displayName, x, y - TANK_SIZE - 8);
+  }
+  
   // Draw "SPECTATING" label if dead
   if (isSpectating) {
     ctx.globalAlpha = 1;
