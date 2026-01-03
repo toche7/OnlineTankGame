@@ -611,12 +611,7 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 });
 
 document.getElementById('closeBtn').addEventListener('click', () => {
-  if (confirm('Are you sure you want to close the game?')) {
-    window.close();
-    if (!window.closed) {
-      alert('Please close this tab manually.');
-    }
-  }
+  window.location.href = '/lobby.html';
 });
 
 // Start game loop
