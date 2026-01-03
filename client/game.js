@@ -65,8 +65,11 @@ function startBackgroundMusic() {
     
     musicPlaying = true;
     
-    // Create a simple looping background music pattern
-    const notes = [130.81, 146.83, 164.81, 174.61]; // C3, D3, E3, F3
+    // Create a more upbeat battle theme melody
+    const notes = [
+      261.63, 293.66, 329.63, 392.00, // C4, D4, E4, G4
+      349.23, 329.63, 293.66, 261.63  // F4, E4, D4, C4
+    ];
     let noteIndex = 0;
     
     function playNote() {
@@ -78,20 +81,20 @@ function startBackgroundMusic() {
       osc.connect(gain);
       gain.connect(ctx.destination);
       
-      osc.type = 'sine';
+      osc.type = 'triangle'; // Warmer sound
       osc.frequency.value = notes[noteIndex];
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.03, ctx.currentTime + 0.3);
       
       osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.4);
+      osc.stop(ctx.currentTime + 0.3);
       
       backgroundMusicOscillators.push(osc);
       
       noteIndex = (noteIndex + 1) % notes.length;
       
       if (musicPlaying) {
-        setTimeout(playNote, 400);
+        setTimeout(playNote, 300); // Faster tempo
       }
     }
     

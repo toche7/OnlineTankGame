@@ -38,7 +38,8 @@ joinGameBtn.addEventListener('click', () => {
 // Start game (host only)
 startGameBtn.addEventListener('click', () => {
   if (isHost && currentGameCode) {
-    socket.emit('startGame', { gameCode: currentGameCode });
+    const tankSpeed = parseInt(document.getElementById('tankSpeed').value);
+    socket.emit('startGame', { gameCode: currentGameCode, tankSpeed: tankSpeed });
   }
 });
 

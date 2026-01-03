@@ -293,6 +293,7 @@ io.on('connection', (socket) => {
   
   socket.on('startGame', (data) => {
     const gameCode = data.gameCode;
+    const tankSpeed = data.tankSpeed || TANK_SPEED; // Default if not provided
     
     if (!lobbies[gameCode] || lobbies[gameCode].host !== socket.id) {
       socket.emit('lobbyError', { message: 'Only host can start the game!' });
@@ -307,6 +308,7 @@ io.on('connection', (socket) => {
     // Change lobby state to playing
     lobbies[gameCode].state = 'playing';
     lobbies[gameCode].gameStartTime = Date.now();
+    lobbies[gameCode].tankSpeed = tankSpeed; // Store tank speed setting
     
     // Don't create tanks here - they will be created when players connect to game page
     // with new socket IDs via initGame
@@ -317,10 +319,11 @@ io.on('connection', (socket) => {
     // Notify all players in the lobby
     io.to(gameCode).emit('gameStarting', {
       startTime: gameStartTime,
-      gameDuration: GAME_DURATION
+      gameDuration: GAME_DURATION,
+      tankSpeed: tankSpeed
     });
     
-    console.log(`Game ${gameCode} started by host ${socket.id}`);
+    console.log(`Game ${gameCode} started by host ${socket.id} with tank speed: ${tankSpeed}`);
   });
   
   socket.on('leaveLobby', (data) => {
@@ -411,8 +414,10 @@ io.on('connection', (socket) => {
   socket.on('move', (data) => {
     if (players[socket.id]) {
       if (players[socket.id].isAlive) {
-        players[socket.id].velocityX = data.velocityX;
-        players[socket.id].velocityY = data.velocityY;
+        const gameCode = socket.gameCode;
+        const speedMultiplier = (gameCode && lobbies[gameCode]) ? (lobbies[gameCode].tankSpeed / TANK_SPEED) : 1;
+        players[socket.id].velocityX = data.velocityX * speedMultiplier;
+        players[socket.id].velocityY = data.velocityY * speedMultiplier;
       } else {
         console.log(`Player ${socket.id} tried to move but isAlive is false`);
       }
