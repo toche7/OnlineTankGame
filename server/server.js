@@ -384,7 +384,7 @@ io.on('connection', (socket) => {
     if (!players[socket.id]) {
       const tank = new Tank(socket.id, generatedObstacles);
       players[socket.id] = tank;
-      console.log(`Created tank for player ${socket.id}`);
+      console.log(`Created tank for player ${socket.id}, isAlive: ${tank.isAlive}`);
     }
 
     // Send initial game state to new player
@@ -409,9 +409,15 @@ io.on('connection', (socket) => {
 
   // Handle player movement
   socket.on('move', (data) => {
-    if (players[socket.id] && players[socket.id].isAlive) {
-      players[socket.id].velocityX = data.velocityX;
-      players[socket.id].velocityY = data.velocityY;
+    if (players[socket.id]) {
+      if (players[socket.id].isAlive) {
+        players[socket.id].velocityX = data.velocityX;
+        players[socket.id].velocityY = data.velocityY;
+      } else {
+        console.log(`Player ${socket.id} tried to move but isAlive is false`);
+      }
+    } else {
+      console.log(`Move event from ${socket.id} but player not found in players`);
     }
   });
 
@@ -561,13 +567,21 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('playerLeft', { playerId: socket.id });
     
     // Clean up if all players disconnect from an active game
+    // But don't reset if there's an active lobby in playing state (players transitioning)
     if (Object.keys(players).length === 0) {
-      gameState = 'waiting';
-      gameStartTime = null;
-      gameWinner = null;
-      projectiles.length = 0;
-      playersReadyToRestart.clear();
-      console.log('All players disconnected. Game reset.');
+      // Check if any lobby is in playing state (players might be transitioning)
+      const hasActiveLobby = Object.values(lobbies).some(lobby => lobby.state === 'playing');
+      
+      if (!hasActiveLobby) {
+        gameState = 'waiting';
+        gameStartTime = null;
+        gameWinner = null;
+        projectiles.length = 0;
+        playersReadyToRestart.clear();
+        console.log('All players disconnected and no active lobbies. Game reset.');
+      } else {
+        console.log('All players disconnected but active lobby exists. Waiting for reconnections...');
+      }
     }
   });
 });

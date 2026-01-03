@@ -396,6 +396,12 @@ function gameLoop() {
       } else {
         socket.emit('move', { velocityX: 0, velocityY: 0 });
       }
+    } else {
+      // Debug: Log once if not alive
+      if (!window._loggedNotAlive) {
+        console.log('Cannot move - tank isAlive:', myTank.isAlive);
+        window._loggedNotAlive = true;
+      }
     }
 
     // Update health display
