@@ -636,10 +636,75 @@ function drawTank(tank, isPlayer) {
 }
 
 function drawProjectile(projectile) {
-  ctx.fillStyle = '#ffff00';
-  ctx.beginPath();
-  ctx.arc(projectile.x, projectile.y, PROJECTILE_SIZE, 0, Math.PI * 2);
-  ctx.fill();
+  // Different visuals based on weapon type
+  switch(projectile.weaponType) {
+    case 'RAPID_FIRE':
+      // Small red bullets
+      ctx.fillStyle = '#ff4444';
+      ctx.beginPath();
+      ctx.arc(projectile.x, projectile.y, PROJECTILE_SIZE * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      // Add glow
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = '#ff4444';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      break;
+      
+    case 'TRIPLE_SHOT':
+      // Green triangular bullets
+      ctx.fillStyle = '#44ff44';
+      ctx.strokeStyle = '#22aa22';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const size = PROJECTILE_SIZE;
+      ctx.moveTo(projectile.x + size, projectile.y);
+      ctx.lineTo(projectile.x - size/2, projectile.y + size);
+      ctx.lineTo(projectile.x - size/2, projectile.y - size);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      break;
+      
+    case 'LASER':
+      // Blue elongated laser beam
+      ctx.strokeStyle = '#4444ff';
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#4444ff';
+      ctx.beginPath();
+      const length = 15;
+      const angle = projectile.rotation;
+      ctx.moveTo(projectile.x - Math.cos(angle) * length/2, projectile.y - Math.sin(angle) * length/2);
+      ctx.lineTo(projectile.x + Math.cos(angle) * length/2, projectile.y + Math.sin(angle) * length/2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      break;
+      
+    case 'ROCKETS':
+      // Purple rockets with trail
+      ctx.fillStyle = '#ff44ff';
+      ctx.strokeStyle = '#aa22aa';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(projectile.x, projectile.y, PROJECTILE_SIZE * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Add exhaust trail
+      ctx.fillStyle = 'rgba(255, 136, 68, 0.5)';
+      ctx.beginPath();
+      const trailAngle = projectile.rotation + Math.PI;
+      ctx.arc(projectile.x + Math.cos(trailAngle) * 8, projectile.y + Math.sin(trailAngle) * 8, 3, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+      
+    default:
+      // Default yellow bullet
+      ctx.fillStyle = '#ffff00';
+      ctx.beginPath();
+      ctx.arc(projectile.x, projectile.y, PROJECTILE_SIZE, 0, Math.PI * 2);
+      ctx.fill();
+  }
 }
 
 function drawGrid() {

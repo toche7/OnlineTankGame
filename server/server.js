@@ -165,11 +165,12 @@ class Tank {
 
 // Projectile class
 class Projectile {
-  constructor(x, y, rotation, playerId) {
+  constructor(x, y, rotation, playerId, weaponType = null) {
     this.x = x;
     this.y = y;
     this.rotation = rotation;
     this.playerId = playerId;
+    this.weaponType = weaponType; // Type of weapon used (RAPID_FIRE, TRIPLE_SHOT, etc.)
     this.velocityX = Math.cos(rotation) * PROJECTILE_SPEED;
     this.velocityY = Math.sin(rotation) * PROJECTILE_SPEED;
   }
@@ -676,17 +677,20 @@ io.on('connection', (socket) => {
     const lobby = lobbies[gameCode];
     if (lobby.gamePlayers[socket.id]) {
       const tank = lobby.gamePlayers[socket.id];
+      const weaponType = tank.activeWeapon || null;
       const projectile = new Projectile(
         tank.x + Math.cos(tank.rotation) * TANK_SIZE,
         tank.y + Math.sin(tank.rotation) * TANK_SIZE,
         tank.rotation,
-        socket.id
+        socket.id,
+        weaponType
       );
       lobby.gameProjectiles.push(projectile);
       io.to(gameCode).emit('projectileCreated', {
         x: projectile.x,
         y: projectile.y,
-        rotation: projectile.rotation
+        rotation: projectile.rotation,
+        weaponType: weaponType
       });
     }
   });
@@ -1157,7 +1161,7 @@ setInterval(() => {
     // Broadcast game state to all clients in this lobby
     io.to(gameCode).emit('gameState', {
       players: lobby.gamePlayers,
-      projectiles: lobby.gameProjectiles.map(p => ({ x: p.x, y: p.y, rotation: p.rotation })),
+      projectiles: lobby.gameProjectiles.map(p => ({ x: p.x, y: p.y, rotation: p.rotation, weaponType: p.weaponType })),
       weapons: lobby.gameWeapons,
       powerups: lobby.gamePowerups
     });
