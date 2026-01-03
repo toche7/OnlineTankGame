@@ -42,7 +42,8 @@ const POWERUP_TYPES = {
   SPEED_BOOST: { name: 'Speed Boost', duration: 8000, color: '#ffff44', speedMultiplier: 1.5 },
   SHIELD: { name: 'Shield', duration: 10000, color: '#44ffff' },
   HEALTH: { name: 'Health', color: '#44ff44', healAmount: 50 },
-  INVINCIBILITY: { name: 'Invincibility', duration: 5000, color: '#ff8844' }
+  INVINCIBILITY: { name: 'Invincibility', duration: 5000, color: '#ff8844' },
+  AMMO_REFILL: { name: 'Ammo Refill', color: '#ffa500' }
 }
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 const MAX_PLAYERS = 10;
@@ -972,6 +973,9 @@ setInterval(() => {
           if (distance < TANK_SIZE + powerup.size) {
             if (powerup.type === 'HEALTH') {
               player.health = Math.min(TANK_MAX_HEALTH, player.health + POWERUP_TYPES.HEALTH.healAmount);
+            } else if (powerup.type === 'AMMO_REFILL') {
+              player.ammo = 20; // Refill ammo to max
+              player.lastAmmoRegen = Date.now();
             } else {
               player.activePowerup = powerup.type;
               player.powerupEndTime = now + POWERUP_TYPES[powerup.type].duration;

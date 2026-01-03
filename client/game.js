@@ -604,6 +604,104 @@ function drawTank(tank, isPlayer) {
   if (isSpectating) {
     tankColor = '#888888';
   }
+  
+  // Draw powerup effects BEFORE the tank
+  if (tank.activePowerup && !isSpectating) {
+    const time = Date.now() / 1000;
+    
+    if (tank.activePowerup === 'SHIELD') {
+      // Draw pulsing shield circle
+      const pulse = Math.sin(time * 4) * 0.2 + 0.8;
+      ctx.strokeStyle = '#44ffff';
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.6 * pulse;
+      ctx.beginPath();
+      ctx.arc(x, y, TANK_SIZE + 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = opacity;
+      
+      // Draw shield hexagon pattern
+      ctx.strokeStyle = '#44ffff';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.4 * pulse;
+      for (let i = 0; i < 6; i++) {
+        const angle = (i * Math.PI / 3) + time;
+        const x1 = x + Math.cos(angle) * (TANK_SIZE + 6);
+        const y1 = y + Math.sin(angle) * (TANK_SIZE + 6);
+        const x2 = x + Math.cos(angle + Math.PI / 3) * (TANK_SIZE + 6);
+        const y2 = y + Math.sin(angle + Math.PI / 3) * (TANK_SIZE + 6);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = opacity;
+    }
+    
+    if (tank.activePowerup === 'SPEED_BOOST') {
+      // Draw speed trail effect
+      const trailCount = 3;
+      for (let i = 0; i < trailCount; i++) {
+        const offset = -15 - (i * 10);
+        const alpha = 0.3 - (i * 0.1);
+        ctx.fillStyle = '#ffff44';
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(
+          x + Math.cos(rotation + Math.PI) * offset,
+          y + Math.sin(rotation + Math.PI) * offset,
+          TANK_SIZE * 0.7,
+          0, Math.PI * 2
+        );
+        ctx.fill();
+      }
+      ctx.globalAlpha = opacity;
+      
+      // Draw speed lines around tank
+      ctx.strokeStyle = '#ffff44';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.5;
+      for (let i = 0; i < 4; i++) {
+        const angle = rotation + Math.PI + (i * Math.PI / 2) + (time * 2);
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(angle) * TANK_SIZE, y + Math.sin(angle) * TANK_SIZE);
+        ctx.lineTo(x + Math.cos(angle) * (TANK_SIZE + 15), y + Math.sin(angle) * (TANK_SIZE + 15));
+        ctx.stroke();
+      }
+      ctx.globalAlpha = opacity;
+    }
+    
+    if (tank.activePowerup === 'INVINCIBILITY') {
+      // Draw sparkling star effect
+      const sparkleCount = 8;
+      for (let i = 0; i < sparkleCount; i++) {
+        const angle = (i / sparkleCount) * Math.PI * 2 + time * 3;
+        const dist = TANK_SIZE + 10 + Math.sin(time * 5 + i) * 5;
+        const sparkleX = x + Math.cos(angle) * dist;
+        const sparkleY = y + Math.sin(angle) * dist;
+        const sparkleSize = 3 + Math.sin(time * 4 + i) * 2;
+        
+        ctx.fillStyle = '#ff8844';
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(sparkleX, sparkleY, sparkleSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = opacity;
+      
+      // Draw glow around tank
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#ff8844';
+      ctx.strokeStyle = '#ff8844';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.arc(x, y, TANK_SIZE + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = opacity;
+    }
+  }
 
   // Draw tank body
   ctx.fillStyle = tankColor;
@@ -801,7 +899,16 @@ function drawPowerup(powerup) {
   ctx.font = 'bold 14px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('⚡', 0, 0);
+  
+  // Different symbols for different powerup types
+  let symbol = '⚡';
+  if (powerup.type === 'HEALTH') symbol = '❤️';
+  else if (powerup.type === 'SPEED_BOOST') symbol = '⚡';
+  else if (powerup.type === 'SHIELD') symbol = '🛡️';
+  else if (powerup.type === 'INVINCIBILITY') symbol = '✨';
+  else if (powerup.type === 'AMMO_REFILL') symbol = '📦';
+  
+  ctx.fillText(symbol, 0, 0);
   
   ctx.shadowBlur = 0;
   ctx.restore();
