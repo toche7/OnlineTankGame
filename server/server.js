@@ -28,6 +28,13 @@ const PROJECTILE_SPEED = 8;
 const PROJECTILE_SIZE = 5;
 const TANK_MAX_HEALTH = 100;
 const UPDATE_RATE = 60; // updates per second
+const GAME_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+const MAX_PLAYERS = 10;
+
+// Game state management
+let gameStartTime = null;
+let gameState = 'waiting'; // 'waiting', 'running', 'finished'
+let gameWinner = null;
 
 // Obstacle class
 class Obstacle {
@@ -121,6 +128,8 @@ class Tank {
     this.velocityY = 0;
     this.score = 0;
     this.kills = 0;
+    this.livesRemaining = 3;
+    this.isAlive = true; // false = spectating (can't move/shoot but visible)
   }
 }
 
@@ -145,6 +154,59 @@ class Projectile {
   }
 }
 
+// Check win conditions
+function checkWinConditions() {
+  if (gameState !== 'running') return false;
+  
+  // Check if only 1 player alive (early win condition)
+  if (Object.keys(players).length > 1) {
+    const alivePlayers = Object.values(players).filter(p => p.isAlive);
+    if (alivePlayers.length === 1) {
+      gameState = 'finished';
+      gameWinner = alivePlayers[0].id;
+      
+      io.emit('gameEnded', {
+        winner: gameWinner,
+        reason: 'Last player standing!',
+        survivors: 1,
+        topKills: alivePlayers[0].kills
+      });
+      
+      return true;
+    }
+  }
+  
+  // Check if time limit reached (5 minutes)
+  if (gameStartTime && Date.now() - gameStartTime >= GAME_DURATION) {
+    gameState = 'finished';
+    
+    // Find winner by most kills
+    const allPlayers = Object.values(players);
+    let topPlayer = null;
+    let topKills = -1;
+    
+    for (let player of allPlayers) {
+      if (player.kills > topKills) {
+        topKills = player.kills;
+        topPlayer = player;
+      }
+    }
+    
+    gameWinner = topPlayer ? topPlayer.id : null;
+    
+    io.emit('gameEnded', {
+      winner: gameWinner,
+      reason: 'Time limit reached! Winner has most kills.',
+      survivors: allPlayers.length,
+      topKills: topKills
+    });
+    
+    return true;
+  }
+  
+  return false;
+}
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
@@ -153,14 +215,50 @@ io.on('connection', (socket) => {
   const tank = new Tank(socket.id, generatedObstacles);
   players[socket.id] = tank;
 
+  // Reset game if it was finished and we're starting fresh
+  if (gameState === 'finished') {
+    gameState = 'waiting';
+    gameStartTime = null;
+    gameWinner = null;
+    projectiles.length = 0;
+    
+    // Reset all existing players' status for the new game
+    Object.values(players).forEach(player => {
+      player.isAlive = true;
+      player.health = TANK_MAX_HEALTH;
+      player.score = 0;
+      player.kills = 0;
+      player.livesRemaining = 3;
+      player.velocityX = 0;
+      player.velocityY = 0;
+    });
+    
+    console.log('Game reset from finished state');
+  }
+
+  // Start game if first player joins (only if not already running)
+  if (Object.keys(players).length === 1 && gameState === 'waiting') {
+    gameStartTime = Date.now();
+    gameState = 'running';
+    io.emit('gameStarted', {
+      startTime: gameStartTime,
+      gameDuration: GAME_DURATION
+    });
+    console.log('Game started with first player');
+  }
+
   // Send initial game state to new player
   socket.emit('init', {
     playerId: socket.id,
     players: players,
     gameWidth: GAME_WIDTH,
     gameHeight: GAME_HEIGHT,
-    obstacles: generatedObstacles
+    obstacles: generatedObstacles,
+    gameStartTime: gameStartTime,
+    gameDuration: GAME_DURATION
   });
+  
+  console.log(`Player ${socket.id} initialized. Total players: ${Object.keys(players).length}, Game state: ${gameState}`);
 
   // Notify other players of new player
   socket.broadcast.emit('playerJoined', {
@@ -170,7 +268,7 @@ io.on('connection', (socket) => {
 
   // Handle player movement
   socket.on('move', (data) => {
-    if (players[socket.id]) {
+    if (players[socket.id] && players[socket.id].isAlive) {
       players[socket.id].velocityX = data.velocityX;
       players[socket.id].velocityY = data.velocityY;
     }
@@ -207,11 +305,25 @@ io.on('connection', (socket) => {
     console.log('Player disconnected:', socket.id);
     delete players[socket.id];
     socket.broadcast.emit('playerLeft', { playerId: socket.id });
+    
+    // Reset game if all players disconnect
+    if (Object.keys(players).length === 0) {
+      gameState = 'waiting';
+      gameStartTime = null;
+      gameWinner = null;
+      projectiles.length = 0;
+      console.log('All players disconnected. Game reset.');
+    }
   });
 });
 
 // Game loop - update game state
 setInterval(() => {
+  // Check win conditions first
+  checkWinConditions();
+  
+  // Skip updates if game is finished
+  if (gameState === 'finished') return;
   // Update player positions
   Object.keys(players).forEach(playerId => {
     const tank = players[playerId];
@@ -319,44 +431,59 @@ setInterval(() => {
             killerTank.kills += 1;
           }
 
-          // Store destruction position before respawning
-          const destroyX = tank.x;
-          const destroyY = tank.y;
-
-          // Respawn destroyed tank at a valid location (not on obstacles)
-          tank.health = TANK_MAX_HEALTH;
-          let validRespawn = false;
-          while (!validRespawn) {
-            tank.x = Math.random() * GAME_WIDTH;
-            tank.y = Math.random() * GAME_HEIGHT;
-            validRespawn = true;
+          // Decrease lives
+          tank.livesRemaining -= 1;
+          
+          if (tank.livesRemaining <= 0) {
+            // Mark as spectating (can't move/shoot but stays visible)
+            tank.isAlive = false;
             
-            // Check if respawn position collides with any obstacle
-            for (let obs of generatedObstacles) {
-              if (obs.collidesWith(tank.x, tank.y, TANK_SIZE)) {
-                validRespawn = false;
-                break;
+            io.emit('tankDestroyed', {
+              playerId: playerId,
+              livesRemaining: 0,
+              killerScore: killerTank ? killerTank.score : 0,
+              isSpectating: true
+            });
+          } else {
+            // Respawn destroyed tank at a valid location (not on obstacles)
+            tank.health = TANK_MAX_HEALTH;
+            const destroyX = tank.x;
+            const destroyY = tank.y;
+            
+            let validRespawn = false;
+            while (!validRespawn) {
+              tank.x = Math.random() * GAME_WIDTH;
+              tank.y = Math.random() * GAME_HEIGHT;
+              validRespawn = true;
+              
+              // Check if respawn position collides with any obstacle
+              for (let obs of generatedObstacles) {
+                if (obs.collidesWith(tank.x, tank.y, TANK_SIZE)) {
+                  validRespawn = false;
+                  break;
+                }
               }
             }
+            
+            // Broadcast destruction explosion (big) at original position
+            io.emit('explosion', {
+              x: destroyX,
+              y: destroyY,
+              size: 'big'
+            });
+            
+            io.emit('tankDestroyed', {
+              playerId: playerId,
+              livesRemaining: tank.livesRemaining,
+              killerScore: killerTank ? killerTank.score : 0
+            });
           }
-          
-          // Broadcast destruction explosion (big) at original position
-          io.emit('explosion', {
-            x: destroyX,
-            y: destroyY,
-            size: 'big'
-          });
-          
-          io.emit('tankDestroyed', { 
-            playerId: playerId,
-            killerScore: killerTank ? killerTank.score : 0
-          });
         }
       }
     });
   }
 
-  // Broadcast game state to all clients
+  // Broadcast game state to all clients (includes all players - both active and spectating)
   io.emit('gameState', {
     players: players,
     projectiles: projectiles.map(p => ({ x: p.x, y: p.y, rotation: p.rotation }))

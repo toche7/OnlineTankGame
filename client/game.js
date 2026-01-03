@@ -9,7 +9,10 @@ let gameState = {
   gameWidth: 800,
   gameHeight: 600,
   explosions: [],
-  obstacles: []
+  obstacles: [],
+  gameStartTime: null,
+  gameDuration: null,
+  gameFinished: false
 };
 
 const keys = {};
@@ -139,7 +142,11 @@ socket.on('init', (data) => {
   gameState.gameWidth = data.gameWidth;
   gameState.gameHeight = data.gameHeight;
   gameState.obstacles = data.obstacles || [];
+  gameState.gameStartTime = data.gameStartTime;
+  gameState.gameDuration = data.gameDuration;
   console.log('Connected with ID:', data.playerId);
+  console.log('Players:', Object.keys(gameState.players).length);
+  updatePlayerCount();
   startBackgroundMusic();
 });
 
@@ -153,6 +160,28 @@ socket.on('playerLeft', (data) => {
   updatePlayerCount();
 });
 
+socket.on('gameStarted', (data) => {
+  gameState.gameStartTime = data.startTime;
+  gameState.gameDuration = data.gameDuration;
+  gameState.gameFinished = false;
+  
+  // Hide finish screen if visible
+  const finishScreen = document.getElementById('finishScreen');
+  if (finishScreen) {
+    finishScreen.classList.add('hidden');
+  }
+  
+  updatePlayerCount();
+  console.log('Game started!', 'Players:', Object.keys(gameState.players).length);
+});
+
+socket.on('gameEnded', (data) => {
+  gameState.gameFinished = true;
+  stopBackgroundMusic();
+  showFinishScreen(data);
+  console.log('Game ended:', data);
+});
+
 socket.on('gameState', (data) => {
   gameState.players = data.players;
   gameState.projectiles = data.projectiles;
@@ -163,9 +192,14 @@ socket.on('projectileCreated', (data) => {
 });
 
 socket.on('tankDestroyed', (data) => {
-  // Tank is respawned on server, just visual feedback
+  if (data.livesRemaining !== undefined) {
+    console.log(`Player destroyed! Lives remaining: ${data.livesRemaining}`);
+  }
   if (data.killerScore && data.killerScore > 0) {
     console.log('Player killed! Score:', data.killerScore);
+  }
+  if (data.isSpectating) {
+    console.log(`Player ${data.playerId} is now spectating`);
   }
 });
 
@@ -279,25 +313,40 @@ function playShootSound() {
 
 // Game loop
 function gameLoop() {
+  // Update game timer
+  if (gameState.gameStartTime && gameState.gameDuration) {
+    const elapsed = Date.now() - gameState.gameStartTime;
+    const remaining = Math.max(0, gameState.gameDuration - elapsed);
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    document.getElementById('gameTime').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
   // Handle movement input
   const myTank = gameState.players[gameState.playerId];
   if (myTank) {
     let velocityX = 0;
     let velocityY = 0;
 
-    if (keys['ArrowUp'] || keys['w'] || keys['W']) velocityY -= 5;
-    if (keys['ArrowDown'] || keys['s'] || keys['S']) velocityY += 5;
-    if (keys['ArrowLeft'] || keys['a'] || keys['A']) velocityX -= 5;
-    if (keys['ArrowRight'] || keys['d'] || keys['D']) velocityX += 5;
+    // Only allow movement if player is alive (not spectating)
+    if (myTank.isAlive) {
+      if (keys['ArrowUp'] || keys['w'] || keys['W']) velocityY -= 5;
+      if (keys['ArrowDown'] || keys['s'] || keys['S']) velocityY += 5;
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) velocityX -= 5;
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) velocityX += 5;
 
-    if (velocityX !== 0 || velocityY !== 0) {
-      socket.emit('move', { velocityX, velocityY });
-    } else {
-      socket.emit('move', { velocityX: 0, velocityY: 0 });
+      if (velocityX !== 0 || velocityY !== 0) {
+        socket.emit('move', { velocityX, velocityY });
+      } else {
+        socket.emit('move', { velocityX: 0, velocityY: 0 });
+      }
     }
 
     // Update health display
     document.getElementById('health').textContent = Math.max(0, Math.round(myTank.health));
+
+    // Update lives display
+    document.getElementById('lives').textContent = myTank.livesRemaining || 0;
 
     // Update score and kills display
     document.getElementById('score').textContent = myTank.score;
@@ -350,15 +399,25 @@ function drawTank(tank, isPlayer) {
   const x = tank.x;
   const y = tank.y;
   const rotation = tank.rotation;
+  
+  // Determine tank color based on player status
+  let tankColor = isPlayer ? '#00ff00' : '#ff0000';
+  const isSpectating = !tank.isAlive;
+  const opacity = isSpectating ? 0.5 : 1;
+  
+  if (isSpectating) {
+    tankColor = '#888888';
+  }
 
   // Draw tank body
-  ctx.fillStyle = isPlayer ? '#00ff00' : '#ff0000';
+  ctx.fillStyle = tankColor;
+  ctx.globalAlpha = opacity;
   ctx.beginPath();
   ctx.arc(x, y, TANK_SIZE, 0, Math.PI * 2);
   ctx.fill();
 
   // Draw tank barrel
-  ctx.strokeStyle = isPlayer ? '#00ff00' : '#ff0000';
+  ctx.strokeStyle = tankColor;
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(x, y);
@@ -374,6 +433,17 @@ function drawTank(tank, isPlayer) {
   ctx.fillRect(x - TANK_SIZE, y + TANK_SIZE + 5, TANK_SIZE * 2, 5);
   ctx.fillStyle = healthPercent > 0.5 ? '#00ff00' : healthPercent > 0.25 ? '#ffff00' : '#ff0000';
   ctx.fillRect(x - TANK_SIZE, y + TANK_SIZE + 5, TANK_SIZE * 2 * healthPercent, 5);
+  
+  // Draw "SPECTATING" label if dead
+  if (isSpectating) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#888888';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('SPECTATING', x, y - TANK_SIZE - 5);
+  }
+  
+  ctx.globalAlpha = 1; // Reset opacity
 }
 
 function drawProjectile(projectile) {
@@ -428,6 +498,62 @@ function updateLeaderboard() {
     return `<li class="${topClass}">${index + 1}. ${player.score} pts${isMe}</li>`;
   }).join('');
 }
+
+// Show finish screen with game results
+function showFinishScreen(data) {
+  const finishScreen = document.getElementById('finishScreen');
+  const finishTitle = document.getElementById('finishTitle');
+  const finishReason = document.getElementById('finishReason');
+  const finishStatus = document.getElementById('finishStatus');
+  const finishStats = document.getElementById('finishStats');
+
+  // Determine if player won or lost
+  const isPlayerWinner = data.winner === gameState.playerId;
+  
+  // Set title based on result
+  finishTitle.textContent = isPlayerWinner ? '🎉 YOU WIN! 🎉' : 'GAME OVER';
+  finishTitle.style.color = isPlayerWinner ? '#ffff00' : '#ff6600';
+  
+  // Set reason
+  finishReason.textContent = data.reason;
+  
+  // Set status
+  if (isPlayerWinner) {
+    finishStatus.textContent = '✨ Congratulations, Champion! ✨';
+    finishStatus.style.color = '#ffff00';
+  } else {
+    finishStatus.textContent = 'Better luck next time!';
+    finishStatus.style.color = '#ff6600';
+  }
+
+  // Display stats
+  const myTank = gameState.players[gameState.playerId];
+  if (myTank) {
+    finishStats.innerHTML = `
+      <p>Your Score: <span>${myTank.score}</span></p>
+      <p>Your Kills: <span>${myTank.kills}</span></p>
+      <p>Your Health: <span>${Math.max(0, Math.round(myTank.health))}</span></p>
+      <p>Total Players: <span>${data.survivors || Object.keys(gameState.players).length}</span></p>
+    `;
+  }
+
+  // Show the finish screen
+  finishScreen.classList.remove('hidden');
+}
+
+// Setup finish screen button handlers
+document.getElementById('restartBtn').addEventListener('click', () => {
+  location.reload();
+});
+
+document.getElementById('closeBtn').addEventListener('click', () => {
+  if (confirm('Are you sure you want to close the game?')) {
+    window.close();
+    if (!window.closed) {
+      alert('Please close this tab manually.');
+    }
+  }
+});
 
 // Start game loop
 gameLoop();
