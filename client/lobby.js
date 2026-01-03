@@ -38,8 +38,6 @@ setInterval(() => {
 const lobbyMenu = document.getElementById('lobbyMenu');
 const waitingRoom = document.getElementById('waitingRoom');
 const createGameBtn = document.getElementById('createGameBtn');
-const joinGameBtn = document.getElementById('joinGameBtn');
-const gameCodeInput = document.getElementById('gameCodeInput');
 const startGameBtn = document.getElementById('startGameBtn');
 const leaveLobbyBtn = document.getElementById('leaveLobbyBtn');
 const gameCodeDisplay = document.getElementById('gameCode');
@@ -53,16 +51,6 @@ const statusMessage = document.getElementById('statusMessage');
 // Create new game
 createGameBtn.addEventListener('click', () => {
   socket.emit('createGame');
-});
-
-// Join existing game
-joinGameBtn.addEventListener('click', () => {
-  const code = gameCodeInput.value.trim().toUpperCase();
-  if (code) {
-    socket.emit('joinGame', { gameCode: code });
-  } else {
-    showError('Please enter a game code');
-  }
 });
 
 // Start game (host only)
@@ -248,6 +236,12 @@ socket.on('lobbyStatus', (data) => {
       const gameItem = document.createElement('div');
       gameItem.className = `game-item ${lobby.state}`;
       
+      // Only make waiting rooms clickable
+      if (lobby.state === 'waiting') {
+        gameItem.classList.add('clickable');
+        gameItem.style.cursor = 'pointer';
+      }
+      
       gameItem.innerHTML = `
         <div class="game-item-info">
           <div class="game-item-code">${lobby.code}</div>
@@ -258,16 +252,18 @@ socket.on('lobbyStatus', (data) => {
         </div>
       `;
       
+      // Add click handler for waiting rooms
+      if (lobby.state === 'waiting') {
+        gameItem.addEventListener('click', () => {
+          const gameCode = lobby.code;
+          socket.emit('joinGame', { gameCode });
+          showStatus(`Joining game ${gameCode}...`);
+        });
+      }
+      
       activeGamesList.appendChild(gameItem);
     });
   } else {
     activeGamesList.innerHTML = '<p style="text-align: center; color: #90caf9; padding: 10px;">No active games</p>';
-  }
-});
-
-// Allow Enter key to join game
-gameCodeInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    joinGameBtn.click();
   }
 });

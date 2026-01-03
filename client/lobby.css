@@ -385,6 +385,18 @@ h4 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  transition: all 0.3s ease;
+}
+
+.game-item.clickable {
+  cursor: pointer;
+}
+
+.game-item.clickable:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateX(4px);
+  border-left-color: #4caf50;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
 }
 
 .game-item.waiting {
@@ -423,6 +435,17 @@ h4 {
 .game-item-badge.waiting {
   background: rgba(255, 235, 59, 0.3);
   color: #ffeb3b;
+}
+
+.join-instruction {
+  text-align: center;
+  color: #90caf9;
+  font-size: 1rem;
+  margin: 15px 0;
+  padding: 10px;
+  background: rgba(33, 150, 243, 0.1);
+  border-radius: 6px;
+  border: 1px dashed rgba(33, 150, 243, 0.3);
 }
 
 /* Responsive */
