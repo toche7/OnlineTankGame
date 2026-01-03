@@ -115,6 +115,24 @@ socket.on('gameJoined', (data) => {
 
 socket.on('playerJoinedLobby', (data) => {
   playersInLobby = data.players;
+  
+  // Check if our host status has changed
+  const wasHost = isHost;
+  isHost = playersInLobby[socket.id]?.isHost || false;
+  
+  // Update UI if host status changed
+  if (wasHost && !isHost) {
+    // We lost host status
+    hostControls.classList.add('hidden');
+    playerWaiting.classList.remove('hidden');
+    showStatus('Original host has returned');
+  } else if (!wasHost && isHost) {
+    // We gained host status
+    hostControls.classList.remove('hidden');
+    playerWaiting.classList.add('hidden');
+    showStatus('You are now the host!');
+  }
+  
   updatePlayersList();
   showStatus(`${data.playerName || 'A player'} joined the lobby`);
 });

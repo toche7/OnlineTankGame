@@ -340,6 +340,11 @@ io.on('connection', (socket) => {
     
     // If old host rejoins, maintain host status and update originalHost
     if (wasHost) {
+      // Remove host status from all other players
+      Object.keys(lobbies[gameCode].players).forEach(playerId => {
+        lobbies[gameCode].players[playerId].isHost = false;
+      });
+      
       lobbies[gameCode].host = socket.id;
       lobbies[gameCode].originalHost = socket.id;
       lobbies[gameCode].hostGameSocketId = null; // Reset for next game
@@ -366,8 +371,9 @@ io.on('connection', (socket) => {
       players: lobbies[gameCode].players
     });
     
-    // Notify other players in lobby
-    socket.to(gameCode).emit('playerJoinedLobby', {
+    // Notify ALL players in lobby (including the rejoining player)
+    // This ensures everyone has the correct host status
+    io.to(gameCode).emit('playerJoinedLobby', {
       playerId: socket.id,
       players: lobbies[gameCode].players
     });
