@@ -185,12 +185,13 @@ function checkWinConditions() {
       gameWinner = alivePlayers[0].id;
       
       if (gameCode) {
-        lobbies[gameCode].state = 'finished';
+        lobbies[gameCode].state = 'waiting'; // Reset to waiting so players can start new game
         io.to(gameCode).emit('gameEnded', {
           winner: gameWinner,
           reason: 'Last player standing!',
           survivors: 1,
-          topKills: alivePlayers[0].kills
+          topKills: alivePlayers[0].kills,
+          returnToLobby: true
         });
       }
       
@@ -217,12 +218,13 @@ function checkWinConditions() {
     gameWinner = topPlayer ? topPlayer.id : null;
     
     if (gameCode) {
-      lobbies[gameCode].state = 'finished';
+      lobbies[gameCode].state = 'waiting'; // Reset to waiting so players can start new game
       io.to(gameCode).emit('gameEnded', {
         winner: gameWinner,
         reason: 'Time limit reached! Winner has most kills.',
         survivors: allPlayers.length,
-        topKills: topKills
+        topKills: topKills,
+        returnToLobby: true
       });
     }
     

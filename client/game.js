@@ -274,7 +274,17 @@ socket.on('restartProgress', (data) => {
 socket.on('gameEnded', (data) => {
   gameState.gameFinished = true;
   stopBackgroundMusic();
-  showFinishScreen(data);
+  
+  if (data.returnToLobby) {
+    // Show results briefly then return to lobby
+    showFinishScreen(data);
+    setTimeout(() => {
+      window.location.href = '/lobby.html';
+    }, 5000); // Show results for 5 seconds
+  } else {
+    showFinishScreen(data);
+  }
+  
   console.log('Game ended:', data);
 });
 
@@ -645,6 +655,12 @@ function showFinishScreen(data) {
       <p>Your Health: <span>${Math.max(0, Math.round(myTank.health))}</span></p>
       <p>Total Players: <span>${data.survivors || Object.keys(gameState.players).length}</span></p>
     `;
+  }
+
+  // Hide restart button if returning to lobby
+  const restartBtn = document.getElementById('restartBtn');
+  if (data.returnToLobby && restartBtn) {
+    restartBtn.style.display = 'none';
   }
 
   // Show the finish screen
