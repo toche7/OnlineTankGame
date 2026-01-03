@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Online Tank Game</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="container">
+    <div id="ui">
+      <div id="playerInfo">
+        <h2>Tank Game</h2>
+        <p>Time: <span id="gameTime">0:00</span> / 5:00</p>
+        <p>Players: <span id="playerCount">0</span></p>
+        <p>Health: <span id="health">100</span></p>
+        <p>Lives: <span id="lives">3</span></p>
+        <p>Score: <span id="score">0</span></p>
+        <p>Kills: <span id="kills">0</span></p>
+        <div id="leaderboard">
+          <h3>Leaderboard</h3>
+          <ul id="scoreList"></ul>
+        </div>
+      </div>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+  </div>
+
+  <!-- Finish Screen Modal -->
+  <div id="finishScreen" class="modal hidden">
+    <div class="modal-content">
+      <h1 id="finishTitle">GAME OVER</h1>
+      <p id="finishReason"></p>
+      <p id="finishStatus"></p>
+      <div id="finishStats" class="finish-stats"></div>
+      <div class="button-container">
+        <button id="restartBtn" class="finish-button restart-btn">Restart Game</button>
+        <button id="closeBtn" class="finish-button close-btn">Close Game</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

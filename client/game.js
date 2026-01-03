@@ -2,6 +2,15 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const socket = io();
 
+// Get game code from URL
+const urlParams = new URLSearchParams(window.location.search);
+const gameCode = urlParams.get('code');
+
+// Redirect to lobby if no game code
+if (!gameCode) {
+  window.location.href = '/lobby.html';
+}
+
 let gameState = {
   playerId: null,
   players: {},
@@ -17,6 +26,19 @@ let gameState = {
 
 const keys = {};
 let mouseAngle = 0;
+
+// Initialize game when connected
+socket.on('connect', () => {
+  console.log('Connected to server, initializing game with code:', gameCode);
+  socket.emit('initGame', { gameCode: gameCode });
+});
+
+// Handle redirect to lobby if game not valid
+socket.on('redirectToLobby', () => {
+  alert('Game session not found or has not started yet.');
+  window.location.href = '/lobby.html';
+});
+
 
 // Audio context and music
 let audioContext = null;

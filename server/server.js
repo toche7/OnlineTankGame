@@ -37,6 +37,18 @@ let gameState = 'waiting'; // 'waiting', 'running', 'finished'
 let gameWinner = null;
 const playersReadyToRestart = new Set(); // Track which players are ready to restart
 
+// Lobby management
+const lobbies = {}; // { gameCode: { players: {}, host: socketId, state: 'waiting'|'playing'|'finished' } }
+
+function generateGameCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded similar looking chars
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
 // Obstacle class
 class Obstacle {
   constructor(x, y, width, height) {
@@ -211,43 +223,188 @@ function checkWinConditions() {
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
-
-  // Create new tank for player (pass obstacles to ensure valid spawn)
-  const tank = new Tank(socket.id, generatedObstacles);
-  players[socket.id] = tank;
-
-  // If game is finished, mark this player as not ready yet
-  if (gameState === 'finished') {
-    // Don't auto-restart, wait for all players to be ready
-    console.log(`Player ${socket.id} joined during finished game. Waiting for restart confirmation.`);
-  } else if (Object.keys(players).length === 1 && gameState === 'waiting') {
-    // Start game if first player joins (only if not already running or finished)
+  
+  // Lobby event handlers
+  socket.on('createGame', () => {
+    const gameCode = generateGameCode();
+    lobbies[gameCode] = {
+      players: {},
+      host: socket.id,
+      state: 'waiting',
+      gameStartTime: null,
+      gameWinner: null
+    };
+    
+    lobbies[gameCode].players[socket.id] = {
+      id: socket.id,
+      isHost: true
+    };
+    
+    socket.join(gameCode);
+    socket.gameCode = gameCode;
+    
+    socket.emit('gameCreated', {
+      gameCode: gameCode,
+      players: lobbies[gameCode].players
+    });
+    
+    console.log(`Game ${gameCode} created by ${socket.id}`);
+  });
+  
+  socket.on('joinGame', (data) => {
+    const gameCode = data.gameCode.toUpperCase();
+    
+    if (!lobbies[gameCode]) {
+      socket.emit('lobbyError', { message: 'Game not found!' });
+      return;
+    }
+    
+    if (lobbies[gameCode].state === 'playing') {
+      socket.emit('gameAlreadyStarted');
+      return;
+    }
+    
+    if (Object.keys(lobbies[gameCode].players).length >= MAX_PLAYERS) {
+      socket.emit('lobbyError', { message: 'Game is full!' });
+      return;
+    }
+    
+    lobbies[gameCode].players[socket.id] = {
+      id: socket.id,
+      isHost: false
+    };
+    
+    socket.join(gameCode);
+    socket.gameCode = gameCode;
+    
+    socket.emit('gameJoined', {
+      gameCode: gameCode,
+      players: lobbies[gameCode].players
+    });
+    
+    // Notify other players in lobby
+    socket.to(gameCode).emit('playerJoinedLobby', {
+      playerId: socket.id,
+      players: lobbies[gameCode].players
+    });
+    
+    console.log(`Player ${socket.id} joined game ${gameCode}`);
+  });
+  
+  socket.on('startGame', (data) => {
+    const gameCode = data.gameCode;
+    
+    if (!lobbies[gameCode] || lobbies[gameCode].host !== socket.id) {
+      socket.emit('lobbyError', { message: 'Only host can start the game!' });
+      return;
+    }
+    
+    if (lobbies[gameCode].state !== 'waiting') {
+      socket.emit('lobbyError', { message: 'Game already started!' });
+      return;
+    }
+    
+    // Change lobby state to playing
+    lobbies[gameCode].state = 'playing';
+    lobbies[gameCode].gameStartTime = Date.now();
+    
+    // Don't create tanks here - they will be created when players connect to game page
+    // with new socket IDs via initGame
+    
     gameStartTime = Date.now();
     gameState = 'running';
-    io.emit('gameStarted', {
+    
+    // Notify all players in the lobby
+    io.to(gameCode).emit('gameStarting', {
       startTime: gameStartTime,
       gameDuration: GAME_DURATION
     });
-    console.log('Game started with first player');
-  }
-
-  // Send initial game state to new player
-  socket.emit('init', {
-    playerId: socket.id,
-    players: players,
-    gameWidth: GAME_WIDTH,
-    gameHeight: GAME_HEIGHT,
-    obstacles: generatedObstacles,
-    gameStartTime: gameStartTime,
-    gameDuration: GAME_DURATION
+    
+    console.log(`Game ${gameCode} started by host ${socket.id}`);
   });
   
-  console.log(`Player ${socket.id} initialized. Total players: ${Object.keys(players).length}, Game state: ${gameState}`);
+  socket.on('leaveLobby', (data) => {
+    const gameCode = data.gameCode;
+    
+    if (!lobbies[gameCode]) return;
+    
+    const wasHost = lobbies[gameCode].host === socket.id;
+    delete lobbies[gameCode].players[socket.id];
+    socket.leave(gameCode);
+    
+    if (Object.keys(lobbies[gameCode].players).length === 0) {
+      // Delete lobby if empty
+      delete lobbies[gameCode];
+      console.log(`Lobby ${gameCode} deleted (empty)`);
+    } else if (wasHost) {
+      // Assign new host
+      const newHost = Object.keys(lobbies[gameCode].players)[0];
+      lobbies[gameCode].host = newHost;
+      lobbies[gameCode].players[newHost].isHost = true;
+      
+      io.to(gameCode).emit('playerLeftLobby', {
+        playerId: socket.id,
+        players: lobbies[gameCode].players,
+        newHost: newHost
+      });
+      
+      console.log(`New host for ${gameCode}: ${newHost}`);
+    } else {
+      io.to(gameCode).emit('playerLeftLobby', {
+        playerId: socket.id,
+        players: lobbies[gameCode].players
+      });
+    }
+  });
 
-  // Notify other players of new player
-  socket.broadcast.emit('playerJoined', {
-    playerId: socket.id,
-    tank: tank
+  // Game initialization - validate player is from a valid lobby
+  socket.on('initGame', (data) => {
+    const gameCode = data.gameCode;
+    
+    console.log(`InitGame called by ${socket.id} for game ${gameCode}`);
+    console.log(`Lobby exists: ${!!lobbies[gameCode]}, State: ${lobbies[gameCode]?.state}`);
+    
+    if (!gameCode || !lobbies[gameCode]) {
+      console.log(`Lobby ${gameCode} not found, redirecting to lobby`);
+      socket.emit('redirectToLobby');
+      return;
+    }
+    
+    if (lobbies[gameCode].state !== 'playing') {
+      console.log(`Game ${gameCode} state is ${lobbies[gameCode].state}, not playing. Redirecting.`);
+      socket.emit('redirectToLobby');
+      return;
+    }
+    
+    // Store gameCode in socket for future events
+    socket.gameCode = gameCode;
+    socket.join(gameCode);
+    
+    // Create new tank for player if not exists
+    if (!players[socket.id]) {
+      const tank = new Tank(socket.id, generatedObstacles);
+      players[socket.id] = tank;
+      console.log(`Created tank for player ${socket.id}`);
+    }
+
+    // Send initial game state to new player
+    socket.emit('init', {
+      playerId: socket.id,
+      players: players,
+      gameWidth: GAME_WIDTH,
+      gameHeight: GAME_HEIGHT,
+      obstacles: generatedObstacles,
+      gameStartTime: gameStartTime,
+      gameDuration: GAME_DURATION
+    });
+    
+    console.log(`Player ${socket.id} initialized for game ${socket.gameCode}. Total players: ${Object.keys(players).length}`);
+
+    // Notify other players of new player
+    socket.to(socket.gameCode).emit('playerJoined', {
+      playerId: socket.id,
+      tank: players[socket.id]
+    });
   });
 
   // Handle player movement
@@ -286,12 +443,15 @@ io.on('connection', (socket) => {
 
   // Handle restart request
   socket.on('requestRestart', () => {
+    const gameCode = socket.gameCode;
+    if (!gameCode || !lobbies[gameCode]) return;
+    
     if (gameState === 'finished') {
       playersReadyToRestart.add(socket.id);
       console.log(`Player ${socket.id} ready to restart. ${playersReadyToRestart.size}/${Object.keys(players).length} ready`);
       
-      // Broadcast ready count to all players
-      io.emit('restartProgress', {
+      // Broadcast ready count to all players in this game
+      io.to(gameCode).emit('restartProgress', {
         ready: playersReadyToRestart.size,
         total: Object.keys(players).length
       });
@@ -301,11 +461,13 @@ io.on('connection', (socket) => {
         console.log('All players ready! Restarting game...');
         
         // Reset game state
-        gameState = 'waiting';
+        gameState = 'running';
         gameStartTime = null;
         gameWinner = null;
         projectiles.length = 0;
         playersReadyToRestart.clear();
+        lobbies[gameCode].state = 'playing';
+        lobbies[gameCode].gameStartTime = Date.now();
         
         // Reset all players' status for the new game
         Object.values(players).forEach(player => {
@@ -338,7 +500,7 @@ io.on('connection', (socket) => {
         gameState = 'running';
         
         // Send updated game state with reset players to all clients
-        io.emit('gameStarted', {
+        io.to(gameCode).emit('gameStarted', {
           startTime: gameStartTime,
           gameDuration: GAME_DURATION,
           players: players // Send updated player data
@@ -351,11 +513,54 @@ io.on('connection', (socket) => {
   // Handle player disconnect
   socket.on('disconnect', () => {
     console.log('Player disconnected:', socket.id);
+    
+    const gameCode = socket.gameCode;
+    
+    // Remove from players
     delete players[socket.id];
     playersReadyToRestart.delete(socket.id);
+    
+    // Handle lobby cleanup
+    if (gameCode && lobbies[gameCode]) {
+      const wasInLobby = lobbies[gameCode].players[socket.id];
+      
+      // Only handle lobby cleanup if game is NOT playing (waiting state)
+      // If playing, players are just transitioning to game page with new socket IDs
+      if (wasInLobby && lobbies[gameCode].state === 'waiting') {
+        const wasHost = lobbies[gameCode].host === socket.id;
+        delete lobbies[gameCode].players[socket.id];
+        
+        if (Object.keys(lobbies[gameCode].players).length === 0) {
+          // Delete lobby if empty
+          delete lobbies[gameCode];
+          console.log(`Lobby ${gameCode} deleted (empty)`);
+        } else if (wasHost) {
+          // Assign new host if in waiting state
+          const newHost = Object.keys(lobbies[gameCode].players)[0];
+          lobbies[gameCode].host = newHost;
+          lobbies[gameCode].players[newHost].isHost = true;
+          
+          io.to(gameCode).emit('playerLeftLobby', {
+            playerId: socket.id,
+            players: lobbies[gameCode].players,
+            newHost: newHost
+          });
+          
+          console.log(`New host for ${gameCode}: ${newHost}`);
+        } else {
+          // Just notify about player leaving
+          io.to(gameCode).emit('playerLeftLobby', {
+            playerId: socket.id,
+            players: lobbies[gameCode].players
+          });
+        }
+      }
+    }
+    
+    // Broadcast to all
     socket.broadcast.emit('playerLeft', { playerId: socket.id });
     
-    // Reset game if all players disconnect
+    // Clean up if all players disconnect from an active game
     if (Object.keys(players).length === 0) {
       gameState = 'waiting';
       gameStartTime = null;
