@@ -188,6 +188,11 @@ function checkWinConditions() {
         lobbies[gameCode].state = 'waiting'; // Reset to waiting so players can start new game
         // Clear old player socket IDs - they will rejoin with new IDs
         lobbies[gameCode].players = {};
+        // Keep the hostGameSocketId so we can identify the host when they rejoin
+        // Clear the game socket IDs set for next game
+        if (lobbies[gameCode].gameSocketIds) {
+          lobbies[gameCode].gameSocketIds.clear();
+        }
         io.to(gameCode).emit('gameEnded', {
           winner: gameWinner,
           reason: 'Last player standing!',
@@ -223,6 +228,11 @@ function checkWinConditions() {
       lobbies[gameCode].state = 'waiting'; // Reset to waiting so players can start new game
       // Clear old player socket IDs - they will rejoin with new IDs
       lobbies[gameCode].players = {};
+      // Keep the hostGameSocketId so we can identify the host when they rejoin
+      // Clear the game socket IDs set for next game
+      if (lobbies[gameCode].gameSocketIds) {
+        lobbies[gameCode].gameSocketIds.clear();
+      }
       io.to(gameCode).emit('gameEnded', {
         winner: gameWinner,
         reason: 'Time limit reached! Winner has most kills.',
@@ -318,14 +328,9 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // Store original host ID if not already stored
-    if (!lobbies[gameCode].originalHost) {
-      lobbies[gameCode].originalHost = lobbies[gameCode].host;
-    }
-    
-    // Check if player was the original host
-    const wasHost = lobbies[gameCode].host === data.oldSocketId || 
-                    lobbies[gameCode].originalHost === data.oldSocketId;
+    // Check if this player was the host by comparing oldSocketId with hostGameSocketId
+    const wasHost = data.oldSocketId && 
+                    lobbies[gameCode].hostGameSocketId === data.oldSocketId;
     
     // Remove old socket ID from players list if it exists
     if (data.oldSocketId && lobbies[gameCode].players[data.oldSocketId]) {
@@ -333,14 +338,12 @@ io.on('connection', (socket) => {
       console.log(`Removed old socket ID ${data.oldSocketId} from lobby ${gameCode}`);
     }
     
-    // Clean up any disconnected players (players who haven't rejoined yet but have stale socket IDs)
-    // Keep track of number of players before cleanup
-    const playersBeforeCleanup = Object.keys(lobbies[gameCode].players).length;
-    
     // If old host rejoins, maintain host status and update originalHost
     if (wasHost) {
       lobbies[gameCode].host = socket.id;
       lobbies[gameCode].originalHost = socket.id;
+      lobbies[gameCode].hostGameSocketId = null; // Reset for next game
+      console.log(`Original host ${socket.id} reclaimed host status in lobby ${gameCode}`);
     } else if (Object.keys(lobbies[gameCode].players).length === 0) {
       // If lobby is empty (all old entries), first person becomes host
       lobbies[gameCode].host = socket.id;
@@ -466,6 +469,18 @@ io.on('connection', (socket) => {
     // Store gameCode in socket for future events
     socket.gameCode = gameCode;
     socket.join(gameCode);
+    
+    // Track game socket IDs - initialize if not exists
+    if (!lobbies[gameCode].gameSocketIds) {
+      lobbies[gameCode].gameSocketIds = new Set();
+    }
+    lobbies[gameCode].gameSocketIds.add(socket.id);
+    
+    // Track if this player was the host in the lobby (first player to join game)
+    if (!lobbies[gameCode].hostGameSocketId && lobbies[gameCode].originalHost) {
+      lobbies[gameCode].hostGameSocketId = socket.id;
+      console.log(`Host game socket ID set to ${socket.id}`);
+    }
     
     // Create new tank for player if not exists
     if (!players[socket.id]) {
