@@ -37,13 +37,13 @@ const WEAPON_TYPES = {
   ROCKETS: { name: 'Rockets', duration: 15000, color: '#ff44ff' }
 };
 
-// Powerup types configuration
+// Power-up types
 const POWERUP_TYPES = {
-  SPEED_BOOST: { name: 'Speed Boost', duration: 8000, color: '#ffff44', speedMultiplier: 1.5 },
-  SHIELD: { name: 'Shield', duration: 10000, color: '#44ffff' },
-  HEALTH: { name: 'Health', color: '#44ff44', healAmount: 50 },
-  INVINCIBILITY: { name: 'Invincibility', duration: 5000, color: '#ff8844' },
-  AMMO_REFILL: { name: 'Ammo Refill', color: '#ffa500' }
+  SPEED_BOOST: { name: 'Speed Boost', duration: 8000, color: '#00d2ff', multiplier: 2.0 }, // Changed from 1.5 to 2.0
+  SHIELD: { name: 'Shield', duration: 10000, color: '#a8e6cf' },
+  HEALTH: { name: 'Health Pack', duration: 0, color: '#ff6b9d', healAmount: 50 },
+  INVINCIBILITY: { name: 'Invincibility', duration: 5000, color: '#ffd93d' },
+  AMMO_REFILL: { name: 'Ammo Refill', duration: 0, color: '#ff8c42', ammoRefill: 20 }
 }
 const GAME_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 const MAX_PLAYERS = 10;
@@ -651,9 +651,16 @@ io.on('connection', (socket) => {
     const lobby = lobbies[gameCode];
     if (lobby.gamePlayers[socket.id]) {
       if (lobby.gamePlayers[socket.id].isAlive) {
-        const speedMultiplier = lobby.tankSpeed ? (lobby.tankSpeed / TANK_SPEED) : 1;
-        lobby.gamePlayers[socket.id].velocityX = data.velocityX * speedMultiplier;
-        lobby.gamePlayers[socket.id].velocityY = data.velocityY * speedMultiplier;
+        const player = lobby.gamePlayers[socket.id];
+        let speedMultiplier = lobby.tankSpeed ? (lobby.tankSpeed / TANK_SPEED) : 1;
+        
+        // Apply Speed Boost powerup if active
+        if (player.activePowerup === 'SPEED_BOOST') {
+          speedMultiplier *= POWERUP_TYPES.SPEED_BOOST.multiplier;
+        }
+        
+        player.velocityX = data.velocityX * speedMultiplier;
+        player.velocityY = data.velocityY * speedMultiplier;
       } else {
         console.log(`Player ${socket.id} tried to move but isAlive is false`);
       }
