@@ -549,6 +549,53 @@ class AIController {
   }
 }
 
+// Helper function to find valid spawn position (not on obstacles or other tanks)
+function findValidSpawnPosition(obstacles, existingTanks, excludeTankId = null) {
+  const MIN_DISTANCE_BETWEEN_TANKS = TANK_SIZE * 3; // Minimum distance between tanks
+  let validSpawn = false;
+  let x, y;
+  let attempts = 0;
+  const maxAttempts = 100;
+  
+  while (!validSpawn && attempts < maxAttempts) {
+    x = Math.random() * GAME_WIDTH;
+    y = Math.random() * GAME_HEIGHT;
+    validSpawn = true;
+    
+    // Check collision with obstacles
+    if (obstacles) {
+      for (let obs of obstacles) {
+        if (obs.collidesWith(x, y, TANK_SIZE)) {
+          validSpawn = false;
+          break;
+        }
+      }
+    }
+    
+    // Check distance from other tanks
+    if (validSpawn && existingTanks) {
+      for (let tankId in existingTanks) {
+        // Skip the tank we're spawning (for respawn case)
+        if (tankId === excludeTankId) continue;
+        
+        const otherTank = existingTanks[tankId];
+        const dx = otherTank.x - x;
+        const dy = otherTank.y - y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < MIN_DISTANCE_BETWEEN_TANKS) {
+          validSpawn = false;
+          break;
+        }
+      }
+    }
+    
+    attempts++;
+  }
+  
+  return { x, y, valid: validSpawn };
+}
+
 // Player class
 class Tank {
   constructor(id, obstacles, isAI = false, aiDifficulty = 'medium', persistentPlayerId = null, username = null, team = null, color = null) {
@@ -565,22 +612,11 @@ class Tank {
       this.aiDifficulty = aiDifficulty;
     }
     
-    let validSpawn = false;
-    
-    // Keep trying to spawn until we find a position not on an obstacle
-    while (!validSpawn) {
-      this.x = Math.random() * GAME_WIDTH;
-      this.y = Math.random() * GAME_HEIGHT;
-      validSpawn = true;
-      
-      // Check if spawn position collides with any obstacle
-      for (let obs of obstacles) {
-        if (obs.collidesWith(this.x, this.y, TANK_SIZE)) {
-          validSpawn = false;
-          break;
-        }
-      }
-    }
+    // Find valid spawn position (not on obstacles, away from other tanks)
+    // Note: existingTanks is not available during construction, so only check obstacles
+    const spawnPos = findValidSpawnPosition(obstacles, null, null);
+    this.x = spawnPos.x;
+    this.y = spawnPos.y;
     
     this.rotation = 0;
     this.turretRotation = 0; // Separate rotation for turret (aiming)
@@ -1428,31 +1464,55 @@ io.on('connection', (socket) => {
     // Create new tank for player if not exists
     const lobby = lobbies[gameCode];
     if (!lobby.gamePlayers[socket.id]) {
-      // Determine player team based on game mode
-      let playerTeam = null;
-      if (lobby.gameMode === 'ai_coop' || lobby.gameMode === 'ai_mixed') {
-        playerTeam = 'human';
-      } else if (lobby.gameMode === 'team_pvp') {
-        // Get team from lobby player data - use current socket.id first, then search by persistentPlayerId
+      // Check if this player already has a tank with a different socket ID (reconnection after refresh)
+      let existingTank = null;
+      let oldSocketId = null;
+      
+      if (persistentPlayerId) {
+        for (const [socketId, tank] of Object.entries(lobby.gamePlayers)) {
+          if (tank.persistentPlayerId === persistentPlayerId) {
+            existingTank = tank;
+            oldSocketId = socketId;
+            break;
+          }
+        }
+      }
+      
+      if (existingTank && oldSocketId) {
+        // Reconnection: reassign existing tank to new socket ID
+        console.log(`Reconnecting player ${username} (${persistentPlayerId}): ${oldSocketId} -> ${socket.id}`);
+        existingTank.id = socket.id; // Update tank's socket ID
+        lobby.gamePlayers[socket.id] = existingTank;
+        delete lobby.gamePlayers[oldSocketId]; // Remove old socket ID reference
+        console.log(`Reconnected tank for player ${username}, preserving health: ${existingTank.health}, isAlive: ${existingTank.isAlive}`);
+      } else {
+        // New player joining: create new tank
+        // Determine player team based on game mode
+        let playerTeam = null;
+        if (lobby.gameMode === 'ai_coop' || lobby.gameMode === 'ai_mixed') {
+          playerTeam = 'human';
+        } else if (lobby.gameMode === 'team_pvp') {
+          // Get team from lobby player data - use current socket.id first, then search by persistentPlayerId
+          let lobbyPlayer = lobby.players[socket.id];
+          if (!lobbyPlayer && persistentPlayerId) {
+            // Search for player by persistentPlayerId if socket.id doesn't match
+            lobbyPlayer = Object.values(lobby.players).find(p => p.playerId === persistentPlayerId);
+          }
+          playerTeam = lobbyPlayer?.team || 'team_a';
+          console.log(`Team assignment for ${username}: found lobby player with team ${lobbyPlayer?.team}, assigned ${playerTeam}`);
+        }
+        
+        // Get player's tank color from lobby player data
         let lobbyPlayer = lobby.players[socket.id];
         if (!lobbyPlayer && persistentPlayerId) {
-          // Search for player by persistentPlayerId if socket.id doesn't match
           lobbyPlayer = Object.values(lobby.players).find(p => p.playerId === persistentPlayerId);
         }
-        playerTeam = lobbyPlayer?.team || 'team_a';
-        console.log(`Team assignment for ${username}: found lobby player with team ${lobbyPlayer?.team}, assigned ${playerTeam}`);
+        const playerColor = lobbyPlayer?.tankColor || null;
+        
+        const tank = new Tank(socket.id, lobby.gameObstacles, false, 'medium', persistentPlayerId, username, playerTeam, playerColor);
+        lobby.gamePlayers[socket.id] = tank;
+        console.log(`Created NEW tank for player ${username} (${socket.id}), team: ${playerTeam}, color: ${playerColor}, gameMode: ${lobby.gameMode}, isAlive: ${tank.isAlive}`);
       }
-      
-      // Get player's tank color from lobby player data
-      let lobbyPlayer = lobby.players[socket.id];
-      if (!lobbyPlayer && persistentPlayerId) {
-        lobbyPlayer = Object.values(lobby.players).find(p => p.playerId === persistentPlayerId);
-      }
-      const playerColor = lobbyPlayer?.tankColor || null;
-      
-      const tank = new Tank(socket.id, lobby.gameObstacles, false, 'medium', persistentPlayerId, username, playerTeam, playerColor);
-      lobby.gamePlayers[socket.id] = tank;
-      console.log(`Created tank for player ${username} (${socket.id}), team: ${playerTeam}, color: ${playerColor}, gameMode: ${lobby.gameMode}, isAlive: ${tank.isAlive}`);
     }
 
     // Send initial game state to new player
@@ -1672,24 +1732,10 @@ io.on('connection', (socket) => {
           player.activePowerup = null;
           player.ammo = lobby.limitedAmmo ? 20 : Infinity;
           
-          // Respawn at random valid location
-          let validSpawn = false;
-          let attempts = 0;
-          while (!validSpawn && attempts < 50) {
-            player.x = Math.random() * GAME_WIDTH;
-            player.y = Math.random() * GAME_HEIGHT;
-            validSpawn = true;
-            
-            if (lobby.gameObstacles) {
-              for (let obs of lobby.gameObstacles) {
-                if (obs.collidesWith(player.x, player.y, TANK_SIZE)) {
-                  validSpawn = false;
-                  break;
-                }
-              }
-            }
-            attempts++;
-          }
+          // Respawn at random valid location (not on obstacles or other tanks)
+          const respawnPos = findValidSpawnPosition(lobby.gameObstacles, lobby.gamePlayers, player.id);
+          player.x = respawnPos.x;
+          player.y = respawnPos.y;
         });
         
         // Generate new obstacles for the new game
@@ -2170,27 +2216,17 @@ setInterval(() => {
                 isSpectating: true
               });
             } else {
-              // Respawn destroyed tank at a valid location (not on obstacles)
+              // Respawn destroyed tank at a valid location (not on obstacles or other tanks)
               tank.health = TANK_MAX_HEALTH;
               tank.ammo = 20; // Reset ammo on respawn
               tank.lastAmmoRegen = Date.now();
               const destroyX = tank.x;
               const destroyY = tank.y;
               
-              let validRespawn = false;
-              while (!validRespawn) {
-                tank.x = Math.random() * GAME_WIDTH;
-                tank.y = Math.random() * GAME_HEIGHT;
-                validRespawn = true;
-                
-                // Check if respawn position collides with any obstacle
-                for (let obs of lobby.gameObstacles) {
-                  if (obs.collidesWith(tank.x, tank.y, TANK_SIZE)) {
-                    validRespawn = false;
-                    break;
-                  }
-                }
-              }
+              // Find valid respawn position away from obstacles and other tanks
+              const respawnPos = findValidSpawnPosition(lobby.gameObstacles, lobby.gamePlayers, tank.id);
+              tank.x = respawnPos.x;
+              tank.y = respawnPos.y;
               
               // Broadcast destruction explosion (big) at original position
               io.to(gameCode).emit('explosion', {
