@@ -1,82 +1,93 @@
 {
   "players": {
-    "player_1767450407335_gwxid4sj0": {
-      "id": "player_1767450407335_gwxid4sj0",
-      "username": "AKE",
-      "stats": {
-        "gamesPlayed": 34,
-        "wins": 13,
-        "kills": 46,
-        "deaths": 63,
-        "totalScore": 4600,
-        "highestKills": 4,
-        "lastPlayed": 1767487703590
-      }
-    },
-    "player_1767450402290_j3799x19l": {
-      "id": "player_1767450402290_j3799x19l",
-      "username": "JJib",
-      "stats": {
-        "gamesPlayed": 10,
-        "wins": 1,
-        "kills": 6,
-        "deaths": 38,
-        "totalScore": 600,
-        "highestKills": 4,
-        "lastPlayed": 1767482913888
-      }
-    },
-    "player_1767447822998_1di9snr4r": {
-      "id": "player_1767447822998_1di9snr4r",
-      "username": "Somchai",
-      "stats": {
-        "gamesPlayed": 22,
-        "wins": 8,
-        "kills": 8,
-        "deaths": 67,
-        "totalScore": 800,
-        "highestKills": 3,
-        "lastPlayed": 1767489907017
-      }
-    },
-    "Ja_TAMlxSmDApRIhAAAr": {
-      "id": "Ja_TAMlxSmDApRIhAAAr",
-      "username": "Player_Ja_TAM",
-      "stats": {
-        "gamesPlayed": 0,
-        "wins": 0,
-        "kills": 0,
-        "deaths": 0,
-        "totalScore": 0,
-        "highestKills": 0,
-        "lastPlayed": 1767486281871
-      }
-    },
-    "player_1767449235514_vo1mtoyob": {
-      "id": "player_1767449235514_vo1mtoyob",
-      "username": "Jejee",
-      "stats": {
-        "gamesPlayed": 22,
-        "wins": 14,
-        "kills": 47,
-        "deaths": 39,
-        "totalScore": 4700,
-        "highestKills": 4,
-        "lastPlayed": 1767488161240
-      }
-    },
     "player_1767447412776_i4e927uzv": {
       "id": "player_1767447412776_i4e927uzv",
       "username": "Player_176744",
       "stats": {
-        "gamesPlayed": 24,
-        "wins": 17,
-        "kills": 82,
-        "deaths": 50,
-        "totalScore": 8200,
+        "gamesPlayed": 2,
+        "wins": 2,
+        "kills": 11,
+        "deaths": 5,
+        "totalScore": 1100,
         "highestKills": 6,
-        "lastPlayed": 1767489907018
-      }
+        "lastPlayed": 1767492622115
+      },
+      "gameHistory": [
+        {
+          "gameId": "WTDQAL",
+          "timestamp": 1767492622117,
+          "result": "win",
+          "kills": 5,
+          "deaths": 4,
+          "score": 500,
+          "health": 0,
+          "gameMode": "ai_coop",
+          "reason": "Human team eliminated all AI bots!"
+        },
+        {
+          "gameId": "WTDQAL",
+          "timestamp": 1767492537245,
+          "result": "win",
+          "kills": 6,
+          "deaths": 1,
+          "score": 600,
+          "health": 30,
+          "gameMode": "ai_coop",
+          "reason": "Human team eliminated all AI bots!"
+        }
+      ]
+    },
+    "player_1767447822998_1di9snr4r": {
+      "id": "player_1767447822998_1di9snr4r",
+      "username": "Player_player",
+      "stats": {
+        "gamesPlayed": 1,
+        "wins": 1,
+        "kills": 0,
+        "deaths": 2,
+        "totalScore": 0,
+        "highestKills": 0,
+        "lastPlayed": 1767492537244
+      },
+      "gameHistory": [
+        {
+          "gameId": "WTDQAL",
+          "timestamp": 1767492537244,
+          "result": "win",
+          "kills": 0,
+          "deaths": 2,
+          "score": 0,
+          "health": 30,
+          "gameMode": "ai_coop",
+          "reason": "Human team eliminated all AI bots!"
+        }
+      ]
+    },
+    "player_1767447836681_5iqmpmf3b": {
+      "id": "player_1767447836681_5iqmpmf3b",
+      "username": "Player_176744",
+      "stats": {
+        "gamesPlayed": 1,
+        "wins": 1,
+        "kills": 1,
+        "deaths": 0,
+        "totalScore": 100,
+        "highestKills": 1,
+        "lastPlayed": 1767492622118
+      },
+      "gameHistory": [
+        {
+          "gameId": "WTDQAL",
+          "timestamp": 1767492622118,
+          "result": "win",
+          "kills": 1,
+          "deaths": 0,
+          "score": 100,
+          "health": 100,
+          "gameMode": "ai_coop",
+          "reason": "Human team eliminated all AI bots!"
+        }
+      ]
     }
   }
 }

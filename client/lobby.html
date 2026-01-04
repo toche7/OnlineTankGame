@@ -16,6 +16,7 @@
         <span id="playerNameDisplay">Guest</span>
         <button id="changeNameBtn" class="btn-small">✏️ Change Name</button>
         <a href="stats.html" class="btn-small">📊 Stats</a>
+        <a href="#" id="lastGameBtn" class="btn-small" style="display:none;">🎮 Last Game</a>
       </div>
     </div>
     
@@ -143,6 +144,37 @@
         <div class="modal-buttons">
           <button id="saveUsernameBtn" class="btn btn-primary">Save</button>
           <button id="cancelUsernameBtn" class="btn btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Last Game Modal -->
+    <div id="lastGameModal" class="modal hidden">
+      <div class="modal-content">
+        <h3>🎮 Last Game Played</h3>
+        <div id="lastGameContent" style="margin: 20px 0;">
+          <div style="margin-bottom: 15px;">
+            <strong>Game Mode:</strong> <span id="lgGameMode"></span>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <strong>Result:</strong> <span id="lgResult" style="font-size: 1.2em;"></span>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <strong>Reason:</strong> <span id="lgReason"></span>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <strong>Time:</strong> <span id="lgTimestamp"></span>
+          </div>
+          <hr style="margin: 15px 0; border: 1px solid #555;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div><strong>Kills:</strong> <span id="lgKills"></span></div>
+            <div><strong>Deaths:</strong> <span id="lgDeaths"></span></div>
+            <div><strong>Score:</strong> <span id="lgScore"></span></div>
+            <div><strong>Final Health:</strong> <span id="lgHealth"></span></div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button id="closeLastGameBtn" class="btn btn-secondary">Close</button>
         </div>
       </div>
     </div>

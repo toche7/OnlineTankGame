@@ -21,6 +21,65 @@ let currentGameCode = null;
 let isHost = false;
 let playersInLobby = {};
 
+// Last game data
+let lastGameData = null;
+
+// Fetch last game on page load
+async function fetchLastGame() {
+  try {
+    const response = await fetch(`/api/player/${playerId}/lastGame`);
+    const data = await response.json();
+    
+    if (data.success && data.lastGame) {
+      lastGameData = data.lastGame;
+      // Show the last game button
+      const lastGameBtn = document.getElementById('lastGameBtn');
+      if (lastGameBtn) {
+        lastGameBtn.style.display = 'inline-block';
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching last game:', error);
+  }
+}
+
+// Format timestamp to readable date
+function formatTimestamp(timestamp) {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+// Display last game modal
+function showLastGameModal() {
+  if (!lastGameData) return;
+  
+  const modal = document.getElementById('lastGameModal');
+  
+  // Populate modal with data
+  document.getElementById('lgGameMode').textContent = lastGameData.gameMode || 'Unknown';
+  document.getElementById('lgResult').textContent = lastGameData.result === 'win' ? '🏆 Victory' : '💀 Defeat';
+  document.getElementById('lgResult').style.color = lastGameData.result === 'win' ? '#4caf50' : '#f44336';
+  document.getElementById('lgReason').textContent = lastGameData.reason || 'Game ended';
+  document.getElementById('lgTimestamp').textContent = formatTimestamp(lastGameData.timestamp);
+  document.getElementById('lgKills').textContent = lastGameData.kills || 0;
+  document.getElementById('lgDeaths').textContent = lastGameData.deaths || 0;
+  document.getElementById('lgScore').textContent = lastGameData.score || 0;
+  document.getElementById('lgHealth').textContent = lastGameData.health || 0;
+  
+  modal.classList.remove('hidden');
+}
+
 // Update username display
 function updateUsernameDisplay() {
   const displayElement = document.getElementById('playerNameDisplay');
@@ -79,6 +138,9 @@ function loadLastGameSettings() {
 // Check if returning from a finished game and auto-rejoin
 window.addEventListener('DOMContentLoaded', () => {
   updateUsernameDisplay();
+  
+  // Fetch last game
+  fetchLastGame();
   
   const urlParams = new URLSearchParams(window.location.search);
   const rejoinCode = urlParams.get('rejoin');
@@ -233,6 +295,33 @@ leaveLobbyBtn.addEventListener('click', () => {
     resetLobby();
   }
 });
+
+// Last game modal handlers
+const lastGameBtn = document.getElementById('lastGameBtn');
+const lastGameModal = document.getElementById('lastGameModal');
+const closeLastGameBtn = document.getElementById('closeLastGameBtn');
+
+if (lastGameBtn) {
+  lastGameBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    showLastGameModal();
+  });
+}
+
+if (closeLastGameBtn) {
+  closeLastGameBtn.addEventListener('click', () => {
+    lastGameModal.classList.add('hidden');
+  });
+}
+
+// Close modal when clicking outside
+if (lastGameModal) {
+  lastGameModal.addEventListener('click', (e) => {
+    if (e.target === lastGameModal) {
+      lastGameModal.classList.add('hidden');
+    }
+  });
+}
 
 // Socket event handlers
 socket.on('gameCreated', (data) => {

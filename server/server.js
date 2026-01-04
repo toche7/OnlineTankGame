@@ -16,6 +16,26 @@ const io = socketIo(server, {
 // Serve static files from client folder
 app.use(express.static(path.join(__dirname, '../client')));
 
+// Add body parser middleware
+app.use(express.json());
+
+// API route to get last game for a player
+app.get('/api/player/:playerId/lastGame', async (req, res) => {
+  try {
+    const playerId = req.params.playerId;
+    const lastGame = await db.getLastGame(playerId);
+    
+    if (lastGame) {
+      res.json({ success: true, lastGame });
+    } else {
+      res.json({ success: false, message: 'No games found' });
+    }
+  } catch (error) {
+    console.error('Error fetching last game:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // Game state
 const players = {};
 const projectiles = [];
@@ -602,7 +622,8 @@ async function checkWinConditions(gameCode) {
       lobby.gameWinner = humanTeamWon ? 'HUMAN_TEAM' : 'AI_TEAM';
       
       // Save stats for all human players (co-op: all humans share win/loss)
-      await saveGameStats(gameCode, lobby.gameWinner);
+      const reason = humanTeamWon ? 'Human team eliminated all AI bots!' : 'AI team eliminated all humans!';
+      await saveGameStats(gameCode, lobby.gameWinner, reason);
       
       lobby.players = {};
       if (lobby.gameSocketIds) {
@@ -640,7 +661,7 @@ async function checkWinConditions(gameCode) {
         lobby.gameWinner = alivePlayers[0].id;
       
         // Save player stats
-        await saveGameStats(gameCode, lobby.gameWinner);
+        await saveGameStats(gameCode, lobby.gameWinner, 'Last player standing!');
         
         // Clear old player socket IDs - they will rejoin with new IDs
         lobby.players = {};
@@ -685,7 +706,7 @@ async function checkWinConditions(gameCode) {
     lobby.gameWinner = topPlayer ? topPlayer.id : null;
     
     // Save player stats
-    await saveGameStats(gameCode, lobby.gameWinner);
+    await saveGameStats(gameCode, lobby.gameWinner, 'Time limit reached! Winner has most kills.');
     
     // Clear old player socket IDs - they will rejoin with new IDs
     lobby.players = {};
@@ -713,9 +734,12 @@ async function checkWinConditions(gameCode) {
 }
 
 // Save player stats after game ends
-async function saveGameStats(gameCode, winnerId) {
+async function saveGameStats(gameCode, winnerId, gameEndReason = 'Game ended') {
   const lobby = lobbies[gameCode];
   if (!lobby || !lobby.gamePlayers) return;
+  
+  // Get game mode from lobby settings
+  const gameMode = lobby.gameMode || 'multiplayer';
   
   // Save stats for all players (excluding AI)
   const players = Object.values(lobby.gamePlayers).filter(p => !p.isAI);
@@ -741,6 +765,19 @@ async function saveGameStats(gameCode, winnerId) {
         deaths: deaths,
         score: player.score || 0,
         isWinner: isWinner
+      });
+      
+      // Save individual game record
+      await db.saveGameRecord(player.persistentPlayerId, {
+        gameId: gameCode,
+        timestamp: Date.now(),
+        result: isWinner ? 'win' : 'loss',
+        kills: player.kills || 0,
+        deaths: deaths,
+        score: player.score || 0,
+        health: player.health || 0,
+        gameMode: gameMode,
+        reason: gameEndReason
       });
       
       console.log(`Saved stats for player ${player.username} (${player.persistentPlayerId}): ${player.kills} kills, ${deaths} deaths, score: ${player.score}, winner: ${isWinner}`);
