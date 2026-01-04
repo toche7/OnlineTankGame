@@ -17,9 +17,14 @@ if (!username) {
   localStorage.setItem('tankGameUsername', username);
 }
 
+// Get or set tank color
+let tankColor = localStorage.getItem('tankColor');
+// tankColor can be null (default), or a hex color string
+
 let currentGameCode = null;
 let isHost = false;
 let playersInGame = {};
+let currentGameMode = 'multiplayer'; // Track current game mode
 
 // Last game data
 let lastGameData = null;
@@ -159,7 +164,8 @@ window.addEventListener('DOMContentLoaded', () => {
         gameCode: rejoinCode, 
         oldSocketId: oldSocketId,
         playerId: playerId,
-        username: username
+        username: username,
+        tankColor: tankColor
       });
       
       // Clear the URL parameters
@@ -237,7 +243,7 @@ usernameInput.addEventListener('keypress', (e) => {
 
 // Create new game
 createGameBtn.addEventListener('click', () => {
-  socket.emit('createGame', { playerId: playerId, username: username });
+  socket.emit('createGame', { playerId: playerId, username: username, tankColor: tankColor });
 });
 
 // Team selection elements
@@ -261,6 +267,26 @@ if (gameModeSelect) {
 
 // Function to update game mode display for all players
 function updateGameModeDisplay(gameMode) {
+  const colorSelectionSection = document.getElementById('colorSelectionSection');
+  
+  // Store current game mode
+  currentGameMode = gameMode || 'multiplayer';
+  
+  // Show/hide color selection based on game mode
+  // Only show for free-for-all modes: multiplayer and ai_solo
+  if (colorSelectionSection) {
+    if (gameMode === 'multiplayer' || gameMode === 'ai_solo') {
+      colorSelectionSection.style.display = 'block';
+    } else {
+      colorSelectionSection.style.display = 'none';
+    }
+  }
+  
+  // Refresh player list to update color indicators
+  if (playersInGame && Object.keys(playersInGame).length > 0) {
+    updatePlayersList();
+  }
+  
   if (gameMode !== 'multiplayer' && gameMode !== 'team_pvp') {
     if (aiSettings) aiSettings.style.display = 'block';
     if (teamSettings) teamSettings.style.display = 'none';
@@ -539,6 +565,12 @@ socket.on('teamError', (data) => {
   showError(data.message);
 });
 
+// Listen for player color changes in lobby
+socket.on('playerColorChanged', (data) => {
+  playersInGame = data.players;
+  updatePlayersList();
+});
+
 // Listen for game settings updates from host
 socket.on('gameSettingsUpdated', (data) => {
   if (data.gameMode !== undefined) {
@@ -573,17 +605,35 @@ function updatePlayersList() {
     const hostBadge = player.isHost ? ' 👑 (Host)' : '';
     const youBadge = id === socket.id ? ' (You)' : '';
     
-    // Add team badge for team_pvp mode
-    let teamBadge = '';
-    if (player.team === 'team_a') {
-      teamBadge = ' ⚡';
-      li.style.color = '#ff8844';
-    } else if (player.team === 'team_b') {
-      teamBadge = ' 🛡️';
-      li.style.color = '#44aaff';
+    // Determine color indicator based on game mode and team
+    let colorIndicator = '';
+    
+    // Modes that use custom colors: multiplayer and ai_solo only
+    const allowCustomColors = (currentGameMode === 'multiplayer' || currentGameMode === 'ai_solo');
+    
+    // Only Team vs Team mode shows team colors (orange/blue)
+    if (currentGameMode === 'team_pvp' && (player.team === 'team_a' || player.team === 'team_b')) {
+      // Team PvP mode: show team color in indicator
+      const teamColor = player.team === 'team_a' ? '#ff8844' : '#44aaff';
+      colorIndicator = `<span style="display: inline-block; width: 12px; height: 12px; background: ${teamColor}; border: 1px solid rgba(255,255,255,0.5); border-radius: 50%; margin-right: 5px; vertical-align: middle;"></span>`;
+    } else if (allowCustomColors && player.tankColor) {
+      // Free-for-all mode with custom color selected
+      colorIndicator = `<span style="display: inline-block; width: 12px; height: 12px; background: ${player.tankColor}; border: 1px solid rgba(255,255,255,0.5); border-radius: 50%; margin-right: 5px; vertical-align: middle;"></span>`;
+    } else {
+      // Default green/red split for all other cases (including co-op, ai_mixed)
+      colorIndicator = `<span style="display: inline-block; width: 12px; height: 12px; background: linear-gradient(135deg, #44ff44 0%, #44ff44 50%, #ff0000 50%, #ff0000 100%); border: 1px solid rgba(255,255,255,0.5); border-radius: 50%; margin-right: 5px; vertical-align: middle;"></span>`;
     }
     
-    li.textContent = `${player.username || `Player ${index + 1}`}${teamBadge}${hostBadge}${youBadge}`;
+    // Add team badge (but don't change text color)
+    let teamBadge = '';
+    const isTeamMode = (currentGameMode === 'team_pvp');
+    if (isTeamMode && player.team === 'team_a') {
+      teamBadge = ' ⚡';
+    } else if (isTeamMode && player.team === 'team_b') {
+      teamBadge = ' 🛡️';
+    }
+    
+    li.innerHTML = `${colorIndicator}${player.username || `Player ${index + 1}`}${teamBadge}${hostBadge}${youBadge}`;
     playersListElement.appendChild(li);
   });
   
@@ -651,7 +701,7 @@ socket.on('gameBrowserStatus', (data) => {
       if (game.state === 'waiting') {
         gameItem.addEventListener('click', () => {
           const gameCode = game.code;
-          socket.emit('joinGame', { gameCode, playerId, username });
+          socket.emit('joinGame', { gameCode, playerId, username, tankColor });
           showStatus(`Joining game ${gameCode}...`);
         });
       }
@@ -661,4 +711,51 @@ socket.on('gameBrowserStatus', (data) => {
   } else {
     activeGamesList.innerHTML = '<p style="text-align: center; color: #90caf9; padding: 10px;">No active games</p>';
   }
+});
+// Tank color selection
+const colorButtons = document.querySelectorAll('.color-btn');
+
+// Set initial selection based on stored color
+colorButtons.forEach(btn => {
+  const btnColor = btn.getAttribute('data-color');
+  const storedColor = tankColor === 'null' ? null : tankColor;
+  
+  if ((btnColor === 'null' && storedColor === null) || (btnColor === storedColor)) {
+    btn.classList.add('selected');
+  }
+  
+  btn.addEventListener('click', () => {
+    // Remove selection from all buttons
+    colorButtons.forEach(b => b.classList.remove('selected'));
+    // Add selection to clicked button
+    btn.classList.add('selected');
+    
+    // Get the color value (handle "null" string)
+    const selectedColor = btnColor === 'null' ? null : btnColor;
+    tankColor = selectedColor;
+    
+    // Save to localStorage
+    if (selectedColor === null) {
+      localStorage.removeItem('tankColor');
+    } else {
+      localStorage.setItem('tankColor', selectedColor);
+    }
+    
+    // Save to database
+    fetch('/api/player/updateColor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, color: selectedColor })
+    }).catch(err => console.error('Error updating color:', err));
+    
+    // If in a lobby, notify other players of color change
+    if (currentGameCode) {
+      socket.emit('updatePlayerColor', { 
+        gameCode: currentGameCode, 
+        color: selectedColor 
+      });
+    }
+    
+    console.log('Tank color updated:', selectedColor || 'default');
+  });
 });

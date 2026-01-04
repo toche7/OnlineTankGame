@@ -487,6 +487,60 @@ h4 {
   gap: 15px;
 }
 
+.color-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.color-btn {
+  width: 36px;
+  height: 36px;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  padding: 3px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.color-btn:hover {
+  transform: scale(1.1);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.color-btn.selected {
+  border-color: #ffeb3b;
+  box-shadow: 0 0 10px rgba(255, 235, 59, 0.5);
+  transform: scale(1.15);
+}
+
+.color-preview {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.default-preview {
+  background: linear-gradient(135deg, #44ff44 0%, #44ff44 50%, #ff0000 50%, #ff0000 100%);
+}
+
+.color-selection-section {
+  text-align: center;
+}
+
+.color-selection-section h4 {
+  color: #64b5f6;
+  margin-bottom: 10px;
+}
+
+.color-selection-section .color-options {
+  justify-content: center;
+}
+
 #playerNameDisplay {
   font-size: 1.2rem;
   font-weight: bold;

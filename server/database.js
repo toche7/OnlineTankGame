@@ -43,6 +43,7 @@ async function getPlayer(playerId, username) {
     data.players[playerId] = {
       id: playerId,
       username: username || `Player_${playerId.substr(0, 6)}`,
+      tankColor: null, // Custom tank color (null = use default)
       stats: {
         gamesPlayed: 0,
         wins: 0,
@@ -74,6 +75,7 @@ async function updatePlayerStats(playerId, gameStats) {
     data.players[playerId] = {
       id: playerId,
       username: `Player_${playerId.substr(0, 6)}`,
+      tankColor: null,
       stats: {
         gamesPlayed: 0,
         wins: 0,
@@ -205,6 +207,36 @@ async function getLastGame(playerId) {
   return player.gameHistory[0];
 }
 
+// Update player tank color preference
+async function updatePlayerColor(playerId, color) {
+  const data = await loadPlayers();
+  let player = data.players[playerId];
+  
+  // Create player if doesn't exist
+  if (!player) {
+    player = {
+      id: playerId,
+      username: `Player_${playerId.substr(0, 6)}`,
+      tankColor: color,
+      stats: {
+        gamesPlayed: 0,
+        wins: 0,
+        kills: 0,
+        deaths: 0,
+        totalScore: 0,
+        highestKills: 0,
+        lastPlayed: Date.now()
+      }
+    };
+    data.players[playerId] = player;
+  } else {
+    player.tankColor = color;
+  }
+  
+  await savePlayers(data);
+  return player;
+}
+
 module.exports = {
   loadPlayers,
   savePlayers,
@@ -213,5 +245,6 @@ module.exports = {
   getLeaderboard,
   getPlayerRank,
   saveGameRecord,
-  getLastGame
+  getLastGame,
+  updatePlayerColor
 };

@@ -35,6 +35,50 @@
           <ul id="playersList"></ul>
         </div>
         
+        <!-- Tank Color Selection (shown only for applicable game modes) -->
+        <div id="colorSelectionSection" class="color-selection-section" style="display: none; margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 5px;">
+          <h4 style="margin: 0 0 10px 0;">🎨 Choose Your Tank Color</h4>
+          <div class="color-options">
+            <button class="color-btn" data-color="null" title="Default (Green for you, Red for enemies)">
+              <div class="color-preview default-preview"></div>
+            </button>
+            <button class="color-btn" data-color="#ff6b6b" title="Red">
+              <div class="color-preview" style="background: #ff6b6b;"></div>
+            </button>
+            <button class="color-btn" data-color="#4ecdc4" title="Cyan">
+              <div class="color-preview" style="background: #4ecdc4;"></div>
+            </button>
+            <button class="color-btn" data-color="#ffd93d" title="Yellow">
+              <div class="color-preview" style="background: #ffd93d;"></div>
+            </button>
+            <button class="color-btn" data-color="#9b59b6" title="Purple">
+              <div class="color-preview" style="background: #9b59b6;"></div>
+            </button>
+            <button class="color-btn" data-color="#ff8c42" title="Orange">
+              <div class="color-preview" style="background: #ff8c42;"></div>
+            </button>
+            <button class="color-btn" data-color="#3498db" title="Blue">
+              <div class="color-preview" style="background: #3498db;"></div>
+            </button>
+            <button class="color-btn" data-color="#2ecc71" title="Green">
+              <div class="color-preview" style="background: #2ecc71;"></div>
+            </button>
+            <button class="color-btn" data-color="#e74c3c" title="Dark Red">
+              <div class="color-preview" style="background: #e74c3c;"></div>
+            </button>
+            <button class="color-btn" data-color="#f39c12" title="Gold">
+              <div class="color-preview" style="background: #f39c12;"></div>
+            </button>
+            <button class="color-btn" data-color="#1abc9c" title="Turquoise">
+              <div class="color-preview" style="background: #1abc9c;"></div>
+            </button>
+            <button class="color-btn" data-color="#e91e63" title="Pink">
+              <div class="color-preview" style="background: #e91e63;"></div>
+            </button>
+          </div>
+          <p style="font-size: 0.85em; margin: 10px 0 0 0; color: #999;">💡 Custom colors only apply in free-for-all modes</p>
+        </div>
+        
         <div id="hostControls" class="host-controls hidden">
             <div class="game-settings">
               <label for="tankSpeed">Tank Speed:</label>

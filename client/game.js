@@ -716,23 +716,30 @@ function drawTank(tank, isPlayer) {
   // Check if this is an AI tank
   const isAI = tank.isAI || (tank.id && tank.id.startsWith('ai_'));
   
-  // Determine tank color based on team and player status
+  // Determine tank color based on team, player status, and custom color
   let tankColor;
   if (isPlayer) {
-    tankColor = '#44ff44'; // Green for player's own tank
+    // Player's own tank - use custom color if set, otherwise default green
+    tankColor = tank.color || '#44ff44';
+  } else if (isAI) {
+    // AI bots always stay red for easy identification
+    tankColor = '#ff0000';
   } else if (gameState.gameMode === 'team_pvp') {
-    // Team PvP mode: red for enemies, blue for teammates
+    // Team PvP mode: force team colors regardless of custom colors
     if (tank.team === gameState.myTeam) {
       tankColor = '#4444ff'; // Blue for teammates
     } else {
       tankColor = '#ff4444'; // Red for enemy team
     }
   } else if (tank.team === 'human') {
-    tankColor = '#0088ff'; // Blue for human teammates (co-op mode)
-  } else if (tank.team === 'ai' || isAI) {
-    tankColor = '#ff0000'; // Red for AI enemies (co-op mode)
+    // Co-op mode: force blue for human teammates
+    tankColor = '#0088ff';
+  } else if (tank.team === 'ai') {
+    // Co-op mode: force red for AI enemies
+    tankColor = '#ff0000';
   } else {
-    tankColor = '#ff0000'; // Red for other players (free-for-all)
+    // Free-for-all: use custom color if set, otherwise default red
+    tankColor = tank.color || '#ff0000';
   }
   
   const isSpectating = !tank.isAlive;

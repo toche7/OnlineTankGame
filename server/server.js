@@ -36,6 +36,23 @@ app.get('/api/player/:playerId/lastGame', async (req, res) => {
   }
 });
 
+// API route to update player tank color
+app.post('/api/player/updateColor', async (req, res) => {
+  try {
+    const { playerId, color } = req.body;
+    
+    if (!playerId) {
+      return res.status(400).json({ success: false, message: 'Player ID required' });
+    }
+    
+    await db.updatePlayerColor(playerId, color);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating player color:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // Game state
 const players = {};
 const projectiles = [];
@@ -109,7 +126,8 @@ function sanitizeTank(tank) {
     isAI: tank.isAI || false,
     aiDifficulty: tank.aiDifficulty || null,
     team: tank.team || null,
-    username: tank.username
+    username: tank.username,
+    color: tank.color || null
   };
 }
 
@@ -533,10 +551,11 @@ class AIController {
 
 // Player class
 class Tank {
-  constructor(id, obstacles, isAI = false, aiDifficulty = 'medium', persistentPlayerId = null, username = null, team = null) {
+  constructor(id, obstacles, isAI = false, aiDifficulty = 'medium', persistentPlayerId = null, username = null, team = null, color = null) {
     this.id = id; // Socket ID for real-time communication
     this.persistentPlayerId = persistentPlayerId || id; // Persistent player ID for stats
     this.username = username || `Player_${id.substr(0, 6)}`;
+    this.color = color; // Custom tank color (null = use default green/red)
     this.isAI = isAI;
     this.team = team; // 'human' or 'ai' for co-op mode, null for free-for-all
     
@@ -875,6 +894,7 @@ io.on('connection', (socket) => {
   socket.on('createGame', async (data) => {
     const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
     const username = data?.username || `Player_${playerId.substr(0, 6)}`;
+    const tankColor = data?.tankColor || null;
     
     // Register/update player in database
     await db.getPlayer(playerId, username);
@@ -909,6 +929,7 @@ io.on('connection', (socket) => {
       id: socket.id,
       playerId: playerId,
       username: username,
+      tankColor: tankColor,
       isHost: true
     };
     
@@ -931,6 +952,7 @@ io.on('connection', (socket) => {
     const gameCode = data.gameCode.toUpperCase();
     const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
     const username = data?.username || `Player_${playerId.substr(0, 6)}`;
+    const tankColor = data?.tankColor || null;
     
     if (!lobbies[gameCode]) {
       socket.emit('lobbyError', { message: 'Game not found!' });
@@ -951,6 +973,7 @@ io.on('connection', (socket) => {
       id: socket.id,
       playerId: playerId,
       username: username,
+      tankColor: tankColor,
       isHost: false
     };
     
@@ -1044,11 +1067,12 @@ io.on('connection', (socket) => {
       id: socket.id,
       playerId: data.playerId,
       username: data.username || (oldPlayerData?.username) || `Player_${socket.id.substr(0, 6)}`,
+      tankColor: data.tankColor || (oldPlayerData?.tankColor) || null,
       isHost: isHost,
       team: oldPlayerData?.team || null // Preserve team from old data
     };
     
-    console.log(`Player ${socket.id} rejoined with team: ${lobbies[gameCode].players[socket.id].team}`);
+    console.log(`Player ${socket.id} rejoined with team: ${lobbies[gameCode].players[socket.id].team}, color: ${lobbies[gameCode].players[socket.id].tankColor}`);
     
     socket.join(gameCode);
     socket.gameCode = gameCode;
@@ -1273,6 +1297,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle player color changes in lobby
+  socket.on('updatePlayerColor', (data) => {
+    const { gameCode, color } = data;
+    
+    if (!gameCode || !lobbies[gameCode]) {
+      return;
+    }
+    
+    const lobby = lobbies[gameCode];
+    
+    if (lobby.players[socket.id]) {
+      lobby.players[socket.id].tankColor = color;
+      
+      // Broadcast to all players in lobby
+      io.to(gameCode).emit('playerColorChanged', {
+        playerId: socket.id,
+        color: color,
+        players: lobby.players
+      });
+      
+      console.log(`Player ${socket.id} changed color to ${color || 'default'} in game ${gameCode}`);
+    }
+  });
+
   // Handle game settings changes (host only)
   socket.on('updateGameSettings', (data) => {
     const { gameCode, gameMode } = data;
@@ -1395,9 +1443,16 @@ io.on('connection', (socket) => {
         console.log(`Team assignment for ${username}: found lobby player with team ${lobbyPlayer?.team}, assigned ${playerTeam}`);
       }
       
-      const tank = new Tank(socket.id, lobby.gameObstacles, false, 'medium', persistentPlayerId, username, playerTeam);
+      // Get player's tank color from lobby player data
+      let lobbyPlayer = lobby.players[socket.id];
+      if (!lobbyPlayer && persistentPlayerId) {
+        lobbyPlayer = Object.values(lobby.players).find(p => p.playerId === persistentPlayerId);
+      }
+      const playerColor = lobbyPlayer?.tankColor || null;
+      
+      const tank = new Tank(socket.id, lobby.gameObstacles, false, 'medium', persistentPlayerId, username, playerTeam, playerColor);
       lobby.gamePlayers[socket.id] = tank;
-      console.log(`Created tank for player ${username} (${socket.id}), team: ${playerTeam}, gameMode: ${lobby.gameMode}, isAlive: ${tank.isAlive}`);
+      console.log(`Created tank for player ${username} (${socket.id}), team: ${playerTeam}, color: ${playerColor}, gameMode: ${lobby.gameMode}, isAlive: ${tank.isAlive}`);
     }
 
     // Send initial game state to new player
