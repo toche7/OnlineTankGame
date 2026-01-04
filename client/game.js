@@ -26,7 +26,9 @@ let gameState = {
   gameDuration: null,
   gameFinished: false,
   countdownActive: false,
-  countdownValue: 0
+  countdownValue: 0,
+  myTeam: null,
+  gameMode: null
 };
 
 const keys = {};
@@ -233,7 +235,35 @@ socket.on('init', (data) => {
   gameState.gameStartTime = data.gameStartTime;
   gameState.gameDuration = data.gameDuration;
   selectedMelody = data.melody || 'battle';
-  console.log('Connected with ID:', data.playerId);
+  
+  // Get my team info
+  const myTank = gameState.players[gameState.playerId];
+  if (myTank && myTank.team) {
+    gameState.myTeam = myTank.team;
+    gameState.gameMode = myTank.team === 'team_a' || myTank.team === 'team_b' ? 'team_pvp' : 
+                         myTank.team === 'human' || myTank.team === 'ai' ? 'ai_coop' : null;
+    
+    // Show team display
+    const teamDisplay = document.getElementById('teamDisplay');
+    if (teamDisplay && gameState.gameMode === 'team_pvp') {
+      teamDisplay.style.display = 'block';
+      if (gameState.myTeam === 'team_a') {
+        teamDisplay.textContent = '⚡ TEAM A';
+        teamDisplay.style.color = '#ff8844';
+      } else if (gameState.myTeam === 'team_b') {
+        teamDisplay.textContent = '🛡️ TEAM B';
+        teamDisplay.style.color = '#44aaff';
+      }
+      
+      // Show team chat
+      const chatContainer = document.getElementById('chatContainer');
+      if (chatContainer) {
+        chatContainer.style.display = 'block';
+      }
+    }
+  }
+  
+  console.log('Connected with ID:', data.playerId, 'Team:', gameState.myTeam);
   console.log('Players:', Object.keys(gameState.players).length);
   console.log('Melody:', selectedMelody);
   updatePlayerCount();
@@ -656,7 +686,14 @@ function drawTank(tank, isPlayer) {
   // Determine tank color based on team and player status
   let tankColor;
   if (isPlayer) {
-    tankColor = '#00ff00'; // Green for player
+    tankColor = '#44ff44'; // Green for player's own tank
+  } else if (gameState.gameMode === 'team_pvp') {
+    // Team PvP mode: red for enemies, blue for teammates
+    if (tank.team === gameState.myTeam) {
+      tankColor = '#4444ff'; // Blue for teammates
+    } else {
+      tankColor = '#ff4444'; // Red for enemy team
+    }
   } else if (tank.team === 'human') {
     tankColor = '#0088ff'; // Blue for human teammates (co-op mode)
   } else if (tank.team === 'ai' || isAI) {
@@ -1042,10 +1079,12 @@ function showFinishScreen(data) {
   const myTank = gameState.players[gameState.playerId];
   let isPlayerWinner = data.winner === gameState.playerId;
   
-  // Check for team-based wins (co-op mode)
-  if (myTank && myTank.team && (data.winner === 'HUMAN_TEAM' || data.winner === 'AI_TEAM')) {
+  // Check for team-based wins (co-op mode and PvP mode)
+  if (myTank && myTank.team && (data.winner === 'HUMAN_TEAM' || data.winner === 'AI_TEAM' || data.winner === 'TEAM_A' || data.winner === 'TEAM_B')) {
     isPlayerWinner = (myTank.team === 'human' && data.winner === 'HUMAN_TEAM') || 
-                     (myTank.team === 'ai' && data.winner === 'AI_TEAM');
+                     (myTank.team === 'ai' && data.winner === 'AI_TEAM') ||
+                     (myTank.team === 'team_a' && data.winner === 'TEAM_A') ||
+                     (myTank.team === 'team_b' && data.winner === 'TEAM_B');
   }
   
   // Set title based on result
@@ -1087,6 +1126,45 @@ function showFinishScreen(data) {
   // Show the finish screen
   finishScreen.classList.remove('hidden');
 }
+
+// Team chat handlers
+const chatInput = document.getElementById('chatInput');
+const chatMessages = document.getElementById('chatMessages');
+const toggleChatBtn = document.getElementById('toggleChatBtn');
+const chatContainer = document.getElementById('chatContainer');
+
+if (toggleChatBtn && chatContainer) {
+  toggleChatBtn.addEventListener('click', () => {
+    chatMessages.style.display = chatMessages.style.display === 'none' ? 'block' : 'none';
+    toggleChatBtn.textContent = chatMessages.style.display === 'none' ? '💬' : '✖';
+  });
+}
+
+if (chatInput) {
+  chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && chatInput.value.trim()) {
+      socket.emit('teamChatMessage', {
+        message: chatInput.value.trim(),
+        team: gameState.myTeam
+      });
+      chatInput.value = '';
+    }
+  });
+}
+
+socket.on('teamChatMessage', (data) => {
+  if (chatMessages && gameState.gameMode === 'team_pvp') {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-message';
+    msgDiv.style.backgroundColor = data.team === 'team_a' ? 'rgba(255, 136, 68, 0.2)' : 'rgba(68, 170, 255, 0.2)';
+    msgDiv.style.padding = '5px 8px';
+    msgDiv.style.marginBottom = '4px';
+    msgDiv.style.borderRadius = '4px';
+    msgDiv.textContent = `${data.playerName}: ${data.message}`;
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+});
 
 // Setup finish screen button handlers
 document.getElementById('statsLink').addEventListener('click', (e) => {

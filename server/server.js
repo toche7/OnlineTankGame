@@ -641,6 +641,43 @@ async function checkWinConditions(gameCode) {
       broadcastLobbyStatus();
       return true;
     }
+  } else if (lobby.gameMode === 'team_pvp') {
+    // Team vs Team PvP: check if one team is eliminated
+    const aliveRedTeam = Object.values(lobby.gamePlayers).filter(p => p.team === 'team_a' && p.isAlive);
+    const aliveBlueTeam = Object.values(lobby.gamePlayers).filter(p => p.team === 'team_b' && p.isAlive);
+    
+    // Don't end game if teams haven't fully loaded
+    const totalRedTeam = Object.values(lobby.gamePlayers).filter(p => p.team === 'team_a').length;
+    const totalBlueTeam = Object.values(lobby.gamePlayers).filter(p => p.team === 'team_b').length;
+    if (totalRedTeam === 0 || totalBlueTeam === 0) {
+      return false; // Wait for both teams to join
+    }
+    
+    if (aliveRedTeam.length === 0 || aliveBlueTeam.length === 0) {
+      lobby.state = 'waiting';
+      const redTeamWon = aliveRedTeam.length > 0;
+      lobby.gameWinner = redTeamWon ? 'TEAM_A' : 'TEAM_B';
+      
+      // Save stats for all players
+      const reason = redTeamWon ? 'Team A eliminated all Team B players!' : 'Team B eliminated all Team A players!';
+      await saveGameStats(gameCode, lobby.gameWinner, reason);
+      
+      lobby.players = {};
+      if (lobby.gameSocketIds) {
+        lobby.gameSocketIds.clear();
+      }
+      
+      io.to(gameCode).emit('gameEnded', {
+        winner: lobby.gameWinner,
+        reason: redTeamWon ? 'Team A eliminated all Team B players!' : 'Team B eliminated all Team A players!',
+        survivors: redTeamWon ? aliveRedTeam.length : aliveBlueTeam.length,
+        topKills: redTeamWon ? Math.max(...aliveRedTeam.map(p => p.kills)) : Math.max(...aliveBlueTeam.map(p => p.kills)),
+        returnToLobby: true
+      });
+      
+      broadcastLobbyStatus();
+      return true;
+    }
   } else {
     // Regular free-for-all mode
     // Count human players (exclude AI)
@@ -749,12 +786,16 @@ async function saveGameStats(gameCode, winnerId, gameEndReason = 'Game ended') {
       // Calculate deaths (3 lives - remaining lives)
       const deaths = 3 - player.livesRemaining + (player.isAlive ? 0 : 1);
       
-      // For co-op mode, check if player's team won
+      // For team-based modes, check if player's team won
       let isWinner = false;
       if (winnerId === 'HUMAN_TEAM') {
         isWinner = player.team === 'human';
       } else if (winnerId === 'AI_TEAM') {
         isWinner = false; // Humans never win when AI team wins
+      } else if (winnerId === 'TEAM_A') {
+        isWinner = player.team === 'team_a';
+      } else if (winnerId === 'TEAM_B') {
+        isWinner = player.team === 'team_b';
       } else {
         isWinner = player.id === winnerId;
       }
@@ -854,6 +895,7 @@ io.on('connection', (socket) => {
       state: 'waiting',
       gameStartTime: null,
       gameWinner: null,
+      gameMode: 'multiplayer', // Default game mode
       // Per-lobby game state
       gamePlayers: {}, // In-game player tanks
       gameProjectiles: [],
@@ -873,7 +915,8 @@ io.on('connection', (socket) => {
     
     socket.emit('gameCreated', {
       gameCode: gameCode,
-      players: lobbies[gameCode].players
+      players: lobbies[gameCode].players,
+      gameMode: lobbies[gameCode].gameMode
     });
     
     // Broadcast lobby status update to all connected clients
@@ -884,6 +927,8 @@ io.on('connection', (socket) => {
   
   socket.on('joinGame', (data) => {
     const gameCode = data.gameCode.toUpperCase();
+    const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
+    const username = data?.username || `Player_${playerId.substr(0, 6)}`;
     
     if (!lobbies[gameCode]) {
       socket.emit('lobbyError', { message: 'Game not found!' });
@@ -902,6 +947,8 @@ io.on('connection', (socket) => {
     
     lobbies[gameCode].players[socket.id] = {
       id: socket.id,
+      playerId: playerId,
+      username: username,
       isHost: false
     };
     
@@ -910,7 +957,8 @@ io.on('connection', (socket) => {
     
     socket.emit('gameJoined', {
       gameCode: gameCode,
-      players: lobbies[gameCode].players
+      players: lobbies[gameCode].players,
+      gameMode: lobbies[gameCode].gameMode || 'multiplayer'
     });
     
     // Notify other players in lobby
@@ -950,10 +998,12 @@ io.on('connection', (socket) => {
     
     console.log(`Was this player the host? ${wasHost}`);
     
-    // Remove old socket ID from players list if it exists
+    // Save old player data (including team) before removing
+    let oldPlayerData = null;
     if (data.oldSocketId && lobbies[gameCode].players[data.oldSocketId]) {
+      oldPlayerData = lobbies[gameCode].players[data.oldSocketId];
       delete lobbies[gameCode].players[data.oldSocketId];
-      console.log(`Removed old socket ID ${data.oldSocketId} from lobby ${gameCode}`);
+      console.log(`Removed old socket ID ${data.oldSocketId} from lobby ${gameCode}, saved team: ${oldPlayerData.team}`);
     }
     
     // If old host rejoins, maintain host status and update originalHost
@@ -987,17 +1037,24 @@ io.on('connection', (socket) => {
     console.log(`Is ${socket.id} the host? ${isHost}`);
     console.log(`=== END REJOIN DEBUG ===\n`);
     
+    // Restore old player data including team if available
     lobbies[gameCode].players[socket.id] = {
       id: socket.id,
-      isHost: isHost
+      playerId: data.playerId,
+      username: data.username || (oldPlayerData?.username) || `Player_${socket.id.substr(0, 6)}`,
+      isHost: isHost,
+      team: oldPlayerData?.team || null // Preserve team from old data
     };
+    
+    console.log(`Player ${socket.id} rejoined with team: ${lobbies[gameCode].players[socket.id].team}`);
     
     socket.join(gameCode);
     socket.gameCode = gameCode;
     
     socket.emit('gameJoined', {
       gameCode: gameCode,
-      players: lobbies[gameCode].players
+      players: lobbies[gameCode].players,
+      gameMode: lobbies[gameCode].gameMode || 'multiplayer'
     });
     
     // Notify ALL players in lobby (including the rejoining player)
@@ -1038,6 +1095,19 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Check if Team PvP mode has players on both teams
+    if (gameMode === 'team_pvp') {
+      const redTeam = Object.values(lobbies[gameCode].players).filter(p => p.team === 'team_a');
+      const blueTeam = Object.values(lobbies[gameCode].players).filter(p => p.team === 'team_b');
+      
+      if (redTeam.length === 0 || blueTeam.length === 0) {
+        socket.emit('lobbyError', {
+          message: 'Team PvP requires at least one player on each team!'
+        });
+        return;
+      }
+    }
+    
     // Check if we've reached the maximum number of concurrent games
     const activeGames = Object.values(lobbies).filter(lobby => lobby.state === 'playing').length;
     if (activeGames >= MAX_CONCURRENT_GAMES) {
@@ -1070,7 +1140,7 @@ io.on('connection', (socket) => {
     
     // Spawn AI tanks based on game mode
     let numAI = 0; // Initialize outside the if block
-    if (gameMode !== 'multiplayer') {
+    if (gameMode === 'ai_coop' || gameMode === 'ai_mixed') {
       numAI = Math.min(Math.max(1, aiCount), 9); // Clamp between 1-9
       
       console.log(`\n=== SPAWNING AI FOR GAME MODE: ${gameMode} ===`);
@@ -1166,6 +1236,103 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Team selection for Team vs Team PvP
+  socket.on('changeTeam', (data) => {
+    const { gameCode, team } = data;
+    
+    if (!gameCode || !lobbies[gameCode]) {
+      socket.emit('teamError', { message: 'Invalid lobby' });
+      return;
+    }
+    
+    const lobby = lobbies[gameCode];
+    
+    if (lobby.state !== 'waiting') {
+      socket.emit('teamError', { message: 'Cannot change teams while game is in progress' });
+      return;
+    }
+    
+    if (team !== 'team_a' && team !== 'team_b') {
+      socket.emit('teamError', { message: 'Invalid team' });
+      return;
+    }
+    
+    if (lobby.players[socket.id]) {
+      lobby.players[socket.id].team = team;
+      
+      io.to(gameCode).emit('teamChanged', {
+        playerId: socket.id,
+        team: team,
+        players: lobby.players
+      });
+      
+      console.log(`Player ${socket.id} changed to ${team} in lobby ${gameCode}`);
+    }
+  });
+
+  // Handle game settings changes (host only)
+  socket.on('updateGameSettings', (data) => {
+    const { gameCode, gameMode } = data;
+    
+    if (!gameCode || !lobbies[gameCode]) {
+      socket.emit('lobbyError', { message: 'Invalid lobby' });
+      return;
+    }
+    
+    const lobby = lobbies[gameCode];
+    
+    // Only host can change settings
+    if (lobby.host !== socket.id) {
+      socket.emit('lobbyError', { message: 'Only host can change game settings' });
+      return;
+    }
+    
+    if (lobby.state !== 'waiting') {
+      socket.emit('lobbyError', { message: 'Cannot change settings while game is in progress' });
+      return;
+    }
+    
+    // Update game mode
+    if (gameMode !== undefined) {
+      lobby.gameMode = gameMode;
+      
+      // Broadcast to all players in the lobby
+      io.to(gameCode).emit('gameSettingsUpdated', {
+        gameMode: gameMode
+      });
+      
+      console.log(`Game mode changed to ${gameMode} in lobby ${gameCode}`);
+    }
+  });
+
+  // Team chat for Team vs Team PvP
+  socket.on('teamChatMessage', (data) => {
+    const { message, team } = data;
+    const gameCode = socket.gameCode;
+    
+    if (!gameCode || !lobbies[gameCode]) {
+      return;
+    }
+    
+    const lobby = lobbies[gameCode];
+    const player = lobby.players[socket.id];
+    
+    if (!player || player.team !== team) {
+      return;
+    }
+    
+    // Broadcast to all players on the same team
+    Object.keys(lobby.players).forEach(playerId => {
+      if (lobby.players[playerId].team === team && lobby.gameSocketIds && lobby.gameSocketIds.has(playerId)) {
+        io.to(playerId).emit('teamChatMessage', {
+          playerName: player.username,
+          message: message,
+          team: team
+        });
+      }
+    });
+  });
+
   // Game initialization - validate player is from a valid lobby
   socket.on('initGame', async (data) => {
     const gameCode = data.gameCode;
@@ -1210,11 +1377,24 @@ io.on('connection', (socket) => {
     // Create new tank for player if not exists
     const lobby = lobbies[gameCode];
     if (!lobby.gamePlayers[socket.id]) {
-      const playerTeam = lobby.gameMode === 'ai_coop' ? 'human' : null; // Set team for co-op mode
+      // Determine player team based on game mode
+      let playerTeam = null;
+      if (lobby.gameMode === 'ai_coop' || lobby.gameMode === 'ai_mixed') {
+        playerTeam = 'human';
+      } else if (lobby.gameMode === 'team_pvp') {
+        // Get team from lobby player data - use current socket.id first, then search by persistentPlayerId
+        let lobbyPlayer = lobby.players[socket.id];
+        if (!lobbyPlayer && persistentPlayerId) {
+          // Search for player by persistentPlayerId if socket.id doesn't match
+          lobbyPlayer = Object.values(lobby.players).find(p => p.playerId === persistentPlayerId);
+        }
+        playerTeam = lobbyPlayer?.team || 'team_a';
+        console.log(`Team assignment for ${username}: found lobby player with team ${lobbyPlayer?.team}, assigned ${playerTeam}`);
+      }
+      
       const tank = new Tank(socket.id, lobby.gameObstacles, false, 'medium', persistentPlayerId, username, playerTeam);
       lobby.gamePlayers[socket.id] = tank;
       console.log(`Created tank for player ${username} (${socket.id}), team: ${playerTeam}, gameMode: ${lobby.gameMode}, isAlive: ${tank.isAlive}`);
-      console.log(`Created tank for player ${username} (${socket.id}), isAlive: ${tank.isAlive}`);
     }
 
     // Send initial game state to new player

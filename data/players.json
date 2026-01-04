@@ -1,65 +1,131 @@
 {
   "players": {
+    "player_1767447822998_1di9snr4r": {
+      "id": "player_1767447822998_1di9snr4r",
+      "username": "Somchai",
+      "stats": {
+        "gamesPlayed": 7,
+        "wins": 1,
+        "kills": 3,
+        "deaths": 16,
+        "totalScore": 300,
+        "highestKills": 3,
+        "lastPlayed": 1767498897648
+      },
+      "gameHistory": [
+        {
+          "gameId": "8LX5DG",
+          "timestamp": 1767498897649,
+          "result": "win",
+          "kills": 3,
+          "deaths": 0,
+          "score": 300,
+          "health": 100,
+          "gameMode": "team_pvp",
+          "reason": "Team B eliminated all Team A players!"
+        },
+        {
+          "gameId": "RM8DU3",
+          "timestamp": 1767498825120,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 4,
+          "score": 0,
+          "health": 0,
+          "gameMode": "team_pvp",
+          "reason": "Team A eliminated all Team B players!"
+        },
+        {
+          "gameId": "YYWSV2",
+          "timestamp": 1767498611226,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 4,
+          "score": 0,
+          "health": 0,
+          "gameMode": "multiplayer",
+          "reason": "Last player standing!"
+        },
+        {
+          "gameId": "4UBSMV",
+          "timestamp": 1767498499784,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0,
+          "score": 0,
+          "health": 100,
+          "gameMode": "team_pvp",
+          "reason": "Team A eliminated all Team B players!"
+        },
+        {
+          "gameId": "PZWF9P",
+          "timestamp": 1767498416079,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 4,
+          "score": 0,
+          "health": 0,
+          "gameMode": "team_pvp",
+          "reason": "Team A eliminated all Team B players!"
+        },
+        {
+          "gameId": "PZWF9P",
+          "timestamp": 1767498366182,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 4,
+          "score": 0,
+          "health": 0,
+          "gameMode": "team_pvp",
+          "reason": "Team A eliminated all Team B players!"
+        },
+        {
+          "gameId": "DW5MZY",
+          "timestamp": 1767498005608,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 0,
+          "score": 0,
+          "health": 100,
+          "gameMode": "team_pvp",
+          "reason": "Blue team eliminated all red team players!"
+        }
+      ]
+    },
     "player_1767447412776_i4e927uzv": {
       "id": "player_1767447412776_i4e927uzv",
       "username": "Player_176744",
       "stats": {
         "gamesPlayed": 2,
-        "wins": 2,
-        "kills": 11,
-        "deaths": 5,
-        "totalScore": 1100,
-        "highestKills": 6,
-        "lastPlayed": 1767492622115
+        "wins": 0,
+        "kills": 6,
+        "deaths": 0,
+        "totalScore": 600,
+        "highestKills": 3,
+        "lastPlayed": 1767498499783
       },
       "gameHistory": [
         {
-          "gameId": "WTDQAL",
-          "timestamp": 1767492622117,
-          "result": "win",
-          "kills": 5,
-          "deaths": 4,
-          "score": 500,
-          "health": 0,
-          "gameMode": "ai_coop",
-          "reason": "Human team eliminated all AI bots!"
+          "gameId": "4UBSMV",
+          "timestamp": 1767498499783,
+          "result": "loss",
+          "kills": 3,
+          "deaths": 0,
+          "score": 300,
+          "health": 100,
+          "gameMode": "team_pvp",
+          "reason": "Team A eliminated all Team B players!"
         },
         {
-          "gameId": "WTDQAL",
-          "timestamp": 1767492537245,
-          "result": "win",
-          "kills": 6,
-          "deaths": 1,
-          "score": 600,
-          "health": 30,
-          "gameMode": "ai_coop",
-          "reason": "Human team eliminated all AI bots!"
-        }
-      ]
-    },
-    "player_1767447822998_1di9snr4r": {
-      "id": "player_1767447822998_1di9snr4r",
-      "username": "Player_player",
-      "stats": {
-        "gamesPlayed": 1,
-        "wins": 1,
-        "kills": 0,
-        "deaths": 2,
-        "totalScore": 0,
-        "highestKills": 0,
-        "lastPlayed": 1767492537244
-      },
-      "gameHistory": [
-        {
-          "gameId": "WTDQAL",
-          "timestamp": 1767492537244,
-          "result": "win",
-          "kills": 0,
-          "deaths": 2,
-          "score": 0,
-          "health": 30,
-          "gameMode": "ai_coop",
-          "reason": "Human team eliminated all AI bots!"
+          "gameId": "DW5MZY",
+          "timestamp": 1767498005606,
+          "result": "loss",
+          "kills": 3,
+          "deaths": 0,
+          "score": 300,
+          "health": 100,
+          "gameMode": "team_pvp",
+          "reason": "Blue team eliminated all red team players!"
         }
       ]
     },
@@ -67,25 +133,91 @@
       "id": "player_1767447836681_5iqmpmf3b",
       "username": "Player_176744",
       "stats": {
-        "gamesPlayed": 1,
-        "wins": 1,
-        "kills": 1,
-        "deaths": 0,
-        "totalScore": 100,
-        "highestKills": 1,
-        "lastPlayed": 1767492622118
+        "gamesPlayed": 7,
+        "wins": 2,
+        "kills": 12,
+        "deaths": 12,
+        "totalScore": 1200,
+        "highestKills": 3,
+        "lastPlayed": 1767498897650
       },
       "gameHistory": [
         {
-          "gameId": "WTDQAL",
-          "timestamp": 1767492622118,
+          "gameId": "8LX5DG",
+          "timestamp": 1767498897650,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 4,
+          "score": 0,
+          "health": 0,
+          "gameMode": "team_pvp",
+          "reason": "Team B eliminated all Team A players!"
+        },
+        {
+          "gameId": "RM8DU3",
+          "timestamp": 1767498825118,
           "result": "win",
-          "kills": 1,
+          "kills": 3,
           "deaths": 0,
-          "score": 100,
+          "score": 300,
           "health": 100,
-          "gameMode": "ai_coop",
-          "reason": "Human team eliminated all AI bots!"
+          "gameMode": "team_pvp",
+          "reason": "Team A eliminated all Team B players!"
+        },
+        {
+          "gameId": "YYWSV2",
+          "timestamp": 1767498611229,
+          "result": "win",
+          "kills": 3,
+          "deaths": 0,
+          "score": 300,
+          "health": 100,
+          "gameMode": "multiplayer",
+          "reason": "Last player standing!"
+        },
+        {
+          "gameId": "4UBSMV",
+          "timestamp": 1767498499782,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 4,
+          "score": 0,
+          "health": 0,
+          "gameMode": "team_pvp",
+          "reason": "Team A eliminated all Team B players!"
+        },
+        {
+          "gameId": "PZWF9P",
+          "timestamp": 1767498416076,
+          "result": "loss",
+          "kills": 3,
+          "deaths": 0,
+          "score": 300,
+          "health": 100,
+          "gameMode": "team_pvp",
+          "reason": "Team A eliminated all Team B players!"
+        },
+        {
+          "gameId": "PZWF9P",
+          "timestamp": 1767498366178,
+          "result": "loss",
+          "kills": 3,
+          "deaths": 0,
+          "score": 300,
+          "health": 100,
+          "gameMode": "team_pvp",
+          "reason": "Team A eliminated all Team B players!"
+        },
+        {
+          "gameId": "DW5MZY",
+          "timestamp": 1767498005607,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 4,
+          "score": 0,
+          "health": 0,
+          "gameMode": "team_pvp",
+          "reason": "Blue team eliminated all red team players!"
         }
       ]
     }

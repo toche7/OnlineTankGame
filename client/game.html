@@ -11,6 +11,7 @@
     <div id="ui">
       <div id="playerInfo">
         <h2>Tank Game</h2>
+        <p id="teamDisplay" style="display: none; font-weight: bold; font-size: 1.1em;"></p>
         <p>Time: <span id="gameTime">0:00</span> / 5:00</p>
         <p>Players: <span id="playerCount">0</span></p>
         <p>Health: <span id="health">100</span></p>
@@ -25,6 +26,16 @@
       </div>
     </div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <!-- Team Chat -->
+    <div id="chatContainer" style="position: absolute; bottom: 10px; left: 10px; width: 350px; display: none;">
+      <div id="chatMessages" style="background: rgba(0,0,0,0.8); border: 2px solid #444; border-radius: 5px; padding: 10px; max-height: 150px; overflow-y: auto; margin-bottom: 5px; font-size: 0.9em;">
+      </div>
+      <div style="display: flex; gap: 5px;">
+        <input type="text" id="chatInput" placeholder="Team chat (press Enter)" style="flex: 1; padding: 8px; background: rgba(0,0,0,0.8); border: 2px solid #444; border-radius: 5px; color: white; font-size: 0.9em;">
+        <button id="toggleChat" style="padding: 8px 15px; background: #444; border: none; border-radius: 5px; color: white; cursor: pointer;">Hide</button>
+      </div>
+    </div>
   </div>
 
   <!-- Finish Screen Modal -->

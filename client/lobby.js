@@ -116,9 +116,14 @@ function loadLastGameSettings() {
       }
       if (settings.gameMode) {
         document.getElementById('gameMode').value = settings.gameMode;
-        // Update AI settings visibility
-        if (settings.gameMode !== 'multiplayer') {
-          aiSettings.style.display = 'block';
+        // Update game mode display (AI/team settings visibility)
+        updateGameModeDisplay(settings.gameMode);
+        // Notify server if we're the host
+        if (isHost && currentGameCode) {
+          socket.emit('updateGameSettings', { 
+            gameCode: currentGameCode, 
+            gameMode: settings.gameMode 
+          });
         }
       }
       if (settings.aiDifficulty) {
@@ -153,7 +158,8 @@ window.addEventListener('DOMContentLoaded', () => {
       socket.emit('rejoinLobby', { 
         gameCode: rejoinCode, 
         oldSocketId: oldSocketId,
-        playerId: playerId
+        playerId: playerId,
+        username: username
       });
       
       // Clear the URL parameters
@@ -234,16 +240,104 @@ createGameBtn.addEventListener('click', () => {
   socket.emit('createGame', { playerId: playerId, username: username });
 });
 
-// Toggle AI settings visibility based on game mode
+// Team selection elements
+const teamSettings = document.getElementById('teamSettings');
+
+// Toggle AI settings and team settings visibility based on game mode
 if (gameModeSelect) {
   gameModeSelect.addEventListener('change', () => {
     const gameMode = gameModeSelect.value;
-    if (gameMode !== 'multiplayer') {
-      aiSettings.style.display = 'block';
-    } else {
-      aiSettings.style.display = 'none';
+    updateGameModeDisplay(gameMode);
+    
+    // Notify server of game mode change (host only)
+    if (isHost && currentGameCode) {
+      socket.emit('updateGameSettings', { 
+        gameCode: currentGameCode, 
+        gameMode: gameMode 
+      });
     }
   });
+}
+
+// Function to update game mode display for all players
+function updateGameModeDisplay(gameMode) {
+  if (gameMode !== 'multiplayer' && gameMode !== 'team_pvp') {
+    if (aiSettings) aiSettings.style.display = 'block';
+    if (teamSettings) teamSettings.style.display = 'none';
+  } else if (gameMode === 'team_pvp') {
+    if (aiSettings) aiSettings.style.display = 'none';
+    if (teamSettings) teamSettings.style.display = 'block';
+  } else {
+    if (aiSettings) aiSettings.style.display = 'none';
+    if (teamSettings) teamSettings.style.display = 'none';
+  }
+}
+const joinRedTeamBtn = document.getElementById('joinRedTeam');
+const joinBlueTeamBtn = document.getElementById('joinBlueTeam');
+const redTeamCount = document.getElementById('redTeamCount');
+const blueTeamCount = document.getElementById('blueTeamCount');
+const teamValidation = document.getElementById('teamValidation');
+
+// Team selection handlers
+if (joinRedTeamBtn) {
+  joinRedTeamBtn.addEventListener('click', () => {
+    if (currentGameCode) {
+      socket.emit('changeTeam', { gameCode: currentGameCode, team: 'team_a' });
+    }
+  });
+}
+
+if (joinBlueTeamBtn) {
+  joinBlueTeamBtn.addEventListener('click', () => {
+    if (currentGameCode) {
+      socket.emit('changeTeam', { gameCode: currentGameCode, team: 'team_b' });
+    }
+  });
+}
+
+// Update team display
+function updateTeamDisplay(players) {
+  if (!teamSettings || teamSettings.style.display === 'none') return;
+  
+  let redCount = 0;
+  let blueCount = 0;
+  
+  Object.values(players).forEach(player => {
+    if (player.team === 'team_a') redCount++;
+    else if (player.team === 'team_b') blueCount++;
+  });
+  
+  if (redTeamCount) redTeamCount.textContent = redCount;
+  if (blueTeamCount) blueTeamCount.textContent = blueCount;
+  
+  // Update validation message for host
+  if (isHost && teamValidation) {
+    if (redCount === 0 || blueCount === 0) {
+      teamValidation.textContent = '⚠️ Both teams need at least 1 player to start!';
+      teamValidation.style.color = '#ff9999';
+      if (startGameBtn) startGameBtn.disabled = true;
+    } else {
+      teamValidation.textContent = '✓ Teams ready!';
+      teamValidation.style.color = '#99ff99';
+      if (startGameBtn) startGameBtn.disabled = false;
+    }
+  }
+  
+  // Highlight selected team button
+  const myPlayer = players[socket.id];
+  if (myPlayer && joinRedTeamBtn && joinBlueTeamBtn) {
+    if (myPlayer.team === 'team_a') {
+      joinRedTeamBtn.style.opacity = '1';
+      joinRedTeamBtn.style.fontWeight = 'bold';
+      joinBlueTeamBtn.style.opacity = '0.6';
+      joinBlueTeamBtn.style.fontWeight = 'normal';
+    } else if (myPlayer.team === 'team_b') {
+      joinBlueTeamBtn.style.opacity = '1';
+      joinBlueTeamBtn.style.fontWeight = 'bold';
+      joinRedTeamBtn.style.opacity = '0.6';
+      joinRedTeamBtn.style.fontWeight = 'normal';
+    }
+  }
 }
 
 // Start game (host only)
@@ -339,6 +433,10 @@ socket.on('gameCreated', (data) => {
   // Load last game settings
   loadLastGameSettings();
   
+  // Set initial game mode visibility
+  const initialGameMode = data.gameMode || 'multiplayer';
+  updateGameModeDisplay(initialGameMode);
+  
   showStatus(`Game created! Share code: ${currentGameCode}`);
 });
 
@@ -352,6 +450,10 @@ socket.on('gameJoined', (data) => {
   showWaitingRoom();
   gameCodeDisplay.textContent = currentGameCode;
   updatePlayersList();
+  
+  // Set game mode visibility for all players
+  const gameMode = data.gameMode || 'multiplayer';
+  updateGameModeDisplay(gameMode);
   
   // Show appropriate controls based on host status
   if (isHost) {
@@ -424,6 +526,26 @@ socket.on('gameAlreadyStarted', () => {
   resetLobby();
 });
 
+// Team selection socket events
+socket.on('teamChanged', (data) => {
+  playersInLobby = data.players;
+  updatePlayersList();
+  if (data.playerId === socket.id) {
+    showStatus(`You joined ${data.team === 'team_a' ? 'Team A' : 'Team B'}!`);
+  }
+});
+
+socket.on('teamError', (data) => {
+  showError(data.message);
+});
+
+// Listen for game settings updates from host
+socket.on('gameSettingsUpdated', (data) => {
+  if (data.gameMode !== undefined) {
+    updateGameModeDisplay(data.gameMode);
+  }
+});
+
 // Helper functions
 function showWaitingRoom() {
   lobbyMenu.classList.add('hidden');
@@ -450,11 +572,25 @@ function updatePlayersList() {
     const li = document.createElement('li');
     const hostBadge = player.isHost ? ' 👑 (Host)' : '';
     const youBadge = id === socket.id ? ' (You)' : '';
-    li.textContent = `Player ${index + 1}${hostBadge}${youBadge}`;
+    
+    // Add team badge for team_pvp mode
+    let teamBadge = '';
+    if (player.team === 'team_a') {
+      teamBadge = ' ⚡';
+      li.style.color = '#ff8844';
+    } else if (player.team === 'team_b') {
+      teamBadge = ' 🛡️';
+      li.style.color = '#44aaff';
+    }
+    
+    li.textContent = `${player.username || `Player ${index + 1}`}${teamBadge}${hostBadge}${youBadge}`;
     playersListElement.appendChild(li);
   });
   
-  // Enable start button only if there's at least 1 player (host can play alone for testing)
+  // Update team display if in team mode
+  updateTeamDisplay(playersInLobby);
+  
+  // Enable start button logic
   if (isHost && startGameBtn) {
     startGameBtn.disabled = playerCount < 1;
     const hint = hostControls.querySelector('.hint');
@@ -515,7 +651,7 @@ socket.on('lobbyStatus', (data) => {
       if (lobby.state === 'waiting') {
         gameItem.addEventListener('click', () => {
           const gameCode = lobby.code;
-          socket.emit('joinGame', { gameCode });
+          socket.emit('joinGame', { gameCode, playerId, username });
           showStatus(`Joining game ${gameCode}...`);
         });
       }
