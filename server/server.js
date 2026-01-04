@@ -52,10 +52,10 @@ const UPDATE_RATE = 60; // updates per second
 
 // Weapon types configuration
 const WEAPON_TYPES = {
-  RAPID_FIRE: { name: 'Rapid Fire', duration: 8000, color: '#ff4444' },
-  TRIPLE_SHOT: { name: 'Triple Shot', duration: 10000, color: '#44ff44' },
-  LASER: { name: 'Laser', duration: 12000, color: '#4444ff' },
-  ROCKETS: { name: 'Rockets', duration: 15000, color: '#ff44ff' }
+  RAPID_FIRE: { name: 'Rapid Fire', duration: 8000, color: '#ff4444', damage: 7 },
+  TRIPLE_SHOT: { name: 'Triple Shot', duration: 10000, color: '#44ff44', damage: 8 },
+  LASER: { name: 'Laser', duration: 12000, color: '#4444ff', damage: 15 },
+  ROCKETS: { name: 'Rockets', duration: 15000, color: '#ff44ff', damage: 20 }
 };
 
 // Power-up types
@@ -1481,14 +1481,41 @@ io.on('connection', (socket) => {
       }
       
       const weaponType = tank.activeWeapon || null;
+      const barrelLength = TANK_SIZE;
+      
+      // Create main projectile
       const projectile = new Projectile(
-        tank.x + Math.cos(tank.rotation) * TANK_SIZE,
-        tank.y + Math.sin(tank.rotation) * TANK_SIZE,
+        tank.x + Math.cos(tank.rotation) * barrelLength,
+        tank.y + Math.sin(tank.rotation) * barrelLength,
         tank.rotation,
         socket.id,
         weaponType
       );
       lobby.gameProjectiles.push(projectile);
+      
+      // Handle TRIPLE_SHOT - create 2 additional projectiles at angles
+      if (weaponType === 'TRIPLE_SHOT') {
+        const angleOffset = Math.PI / 12; // 15 degrees
+        
+        const projectile2 = new Projectile(
+          tank.x + Math.cos(tank.rotation - angleOffset) * barrelLength,
+          tank.y + Math.sin(tank.rotation - angleOffset) * barrelLength,
+          tank.rotation - angleOffset,
+          socket.id,
+          weaponType
+        );
+        
+        const projectile3 = new Projectile(
+          tank.x + Math.cos(tank.rotation + angleOffset) * barrelLength,
+          tank.y + Math.sin(tank.rotation + angleOffset) * barrelLength,
+          tank.rotation + angleOffset,
+          socket.id,
+          weaponType
+        );
+        
+        lobby.gameProjectiles.push(projectile2, projectile3);
+      }
+      
       io.to(gameCode).emit('projectileCreated', {
         x: projectile.x,
         y: projectile.y,
@@ -2006,8 +2033,48 @@ setInterval(() => {
           const hitX = lobby.gameProjectiles[i].x;
           const hitY = lobby.gameProjectiles[i].y;
           
-          // Apply damage: one-hit kill in debug mode, otherwise 10 damage
-          const damage = lobby.debugMode ? 999 : 10;
+          // Check if tank has invincibility - completely block damage
+          if (tank.activePowerup === 'INVINCIBILITY') {
+            lobby.gameProjectiles.splice(i, 1);
+            
+            // Broadcast invincibility deflection effect
+            io.to(gameCode).emit('explosion', {
+              x: hitX,
+              y: hitY,
+              size: 'small'
+            });
+            
+            io.to(gameCode).emit('powerupBlocked', {
+              playerId: playerId,
+              powerupType: 'INVINCIBILITY'
+            });
+            
+            return; // Skip damage completely
+          }
+          
+          // Calculate damage based on weapon type and debug mode
+          let damage;
+          if (lobby.debugMode) {
+            damage = 999; // One-hit kill in debug mode
+          } else {
+            // Get weapon damage or use default 10
+            const projectileWeaponType = lobby.gameProjectiles[i].weaponType;
+            if (projectileWeaponType && WEAPON_TYPES[projectileWeaponType]) {
+              damage = WEAPON_TYPES[projectileWeaponType].damage;
+            } else {
+              damage = 10; // Default damage for normal bullets
+            }
+          }
+          
+          // Check if tank has shield - reduce damage by 50%
+          if (tank.activePowerup === 'SHIELD') {
+            damage = Math.ceil(damage * 0.5);
+            io.to(gameCode).emit('shieldAbsorbed', {
+              playerId: playerId,
+              damageReduced: damage
+            });
+          }
+          
           tank.health -= damage;
           lobby.gameProjectiles.splice(i, 1);
 
