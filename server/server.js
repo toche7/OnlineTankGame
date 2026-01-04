@@ -1140,14 +1140,15 @@ io.on('connection', (socket) => {
     
     // Spawn AI tanks based on game mode
     let numAI = 0; // Initialize outside the if block
-    if (gameMode === 'ai_coop' || gameMode === 'ai_mixed') {
+    if (gameMode === 'ai_solo' || gameMode === 'ai_coop' || gameMode === 'ai_mixed') {
       numAI = Math.min(Math.max(1, aiCount), 9); // Clamp between 1-9
       
       console.log(`\n=== SPAWNING AI FOR GAME MODE: ${gameMode} ===`);
       
       for (let i = 0; i < numAI; i++) {
         const aiId = `ai_${gameCode}_${i}`;
-        const aiTeam = gameMode === 'ai_coop' ? 'ai' : null; // Set team for co-op mode
+        // Set team: 'ai' for co-op mode, null for solo/mixed modes
+        const aiTeam = gameMode === 'ai_coop' ? 'ai' : null;
         const aiTank = new Tank(aiId, lobbies[gameCode].gameObstacles, true, aiDifficulty, null, null, aiTeam);
         lobbies[gameCode].gamePlayers[aiId] = aiTank;
         console.log(`Spawned AI ${aiId} with team: ${aiTeam}, difficulty: ${aiDifficulty}`);
@@ -1552,6 +1553,20 @@ io.on('connection', (socket) => {
         } else {
           lobby.gameProjectiles = [];
         }
+        
+        // Clear weapons and powerups for restart
+        if (lobby.gameWeapons) {
+          lobby.gameWeapons.length = 0;
+        }
+        if (lobby.gamePowerups) {
+          lobby.gamePowerups.length = 0;
+        }
+        
+        // Count AI bots and human players
+        const humanPlayers = Object.values(lobby.gamePlayers || {}).filter(p => !p.isAI);
+        const aiBots = Object.values(lobby.gamePlayers || {}).filter(p => p.isAI);
+        
+        console.log(`Restart: Found ${humanPlayers.length} human players and ${aiBots.length} AI bots`);
         
         // Reset all players' status for the new game
         Object.values(lobby.gamePlayers || {}).forEach(player => {
