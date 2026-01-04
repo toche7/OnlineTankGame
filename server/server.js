@@ -95,6 +95,7 @@ function sanitizeTank(tank) {
     x: tank.x,
     y: tank.y,
     rotation: tank.rotation,
+    turretRotation: tank.turretRotation,
     health: tank.health,
     velocityX: tank.velocityX,
     velocityY: tank.velocityY,
@@ -563,6 +564,7 @@ class Tank {
     }
     
     this.rotation = 0;
+    this.turretRotation = 0; // Separate rotation for turret (aiming)
     this.health = TANK_MAX_HEALTH;
     this.velocityX = 0;
     this.velocityY = 0;
@@ -1439,6 +1441,11 @@ io.on('connection', (socket) => {
         
         player.velocityX = data.velocityX * speedMultiplier;
         player.velocityY = data.velocityY * speedMultiplier;
+        
+        // Update base rotation based on movement direction
+        if (data.velocityX !== 0 || data.velocityY !== 0) {
+          player.rotation = Math.atan2(data.velocityY, data.velocityX);
+        }
       } else {
         console.log(`Player ${socket.id} tried to move but isAlive is false`);
       }
@@ -1447,14 +1454,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle tank rotation
+  // Handle turret rotation (aiming)
   socket.on('rotate', (data) => {
     const gameCode = socket.gameCode;
     if (!gameCode || !lobbies[gameCode]) return;
     
     const lobby = lobbies[gameCode];
     if (lobby.gamePlayers[socket.id]) {
-      lobby.gamePlayers[socket.id].rotation = data.rotation;
+      lobby.gamePlayers[socket.id].turretRotation = data.rotation;
     }
   });
 
@@ -1482,12 +1489,13 @@ io.on('connection', (socket) => {
       
       const weaponType = tank.activeWeapon || null;
       const barrelLength = TANK_SIZE;
+      const shootRotation = tank.turretRotation; // Use turret rotation for shooting
       
       // Create main projectile
       const projectile = new Projectile(
-        tank.x + Math.cos(tank.rotation) * barrelLength,
-        tank.y + Math.sin(tank.rotation) * barrelLength,
-        tank.rotation,
+        tank.x + Math.cos(shootRotation) * barrelLength,
+        tank.y + Math.sin(shootRotation) * barrelLength,
+        shootRotation,
         socket.id,
         weaponType
       );
@@ -1498,17 +1506,17 @@ io.on('connection', (socket) => {
         const angleOffset = Math.PI / 12; // 15 degrees
         
         const projectile2 = new Projectile(
-          tank.x + Math.cos(tank.rotation - angleOffset) * barrelLength,
-          tank.y + Math.sin(tank.rotation - angleOffset) * barrelLength,
-          tank.rotation - angleOffset,
+          tank.x + Math.cos(shootRotation - angleOffset) * barrelLength,
+          tank.y + Math.sin(shootRotation - angleOffset) * barrelLength,
+          shootRotation - angleOffset,
           socket.id,
           weaponType
         );
         
         const projectile3 = new Projectile(
-          tank.x + Math.cos(tank.rotation + angleOffset) * barrelLength,
-          tank.y + Math.sin(tank.rotation + angleOffset) * barrelLength,
-          tank.rotation + angleOffset,
+          tank.x + Math.cos(shootRotation + angleOffset) * barrelLength,
+          tank.y + Math.sin(shootRotation + angleOffset) * barrelLength,
+          shootRotation + angleOffset,
           socket.id,
           weaponType
         );

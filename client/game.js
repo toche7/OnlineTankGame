@@ -840,23 +840,92 @@ function drawTank(tank, isPlayer) {
     }
   }
 
-  // Draw tank body
-  ctx.fillStyle = tankColor;
+  // Draw tank with separate base and turret rotation
+  const baseRotation = tank.rotation || 0;
+  const turretRotation = tank.turretRotation !== undefined ? tank.turretRotation : tank.rotation || 0;
+  
+  ctx.save();
+  ctx.translate(x, y);
   ctx.globalAlpha = opacity;
+  
+  // === Draw tank base (body and tracks) ===
+  ctx.save();
+  ctx.rotate(baseRotation);
+  
+  // Draw tank tracks (darker)
+  const trackWidth = TANK_SIZE * 0.6;
+  const trackHeight = TANK_SIZE * 1.8;
+  const trackOffset = TANK_SIZE * 0.7;
+  
+  ctx.fillStyle = isSpectating ? '#444444' : (isPlayer ? '#1a5c1a' : (tankColor === '#4ecdc4' ? '#2a7a7a' : '#7a5a2a'));
+  
+  // Left track
+  ctx.fillRect(-trackWidth/2 - trackOffset, -trackHeight/2, trackWidth, trackHeight);
+  // Right track
+  ctx.fillRect(-trackWidth/2 + trackOffset, -trackHeight/2, trackWidth, trackHeight);
+  
+  // Track details (treads)
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.lineWidth = 2;
+  for (let i = -trackHeight/2; i < trackHeight/2; i += 6) {
+    ctx.beginPath();
+    ctx.moveTo(-trackWidth/2 - trackOffset, i);
+    ctx.lineTo(-trackWidth/2 - trackOffset + trackWidth, i);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(-trackWidth/2 + trackOffset, i);
+    ctx.lineTo(-trackWidth/2 + trackOffset + trackWidth, i);
+    ctx.stroke();
+  }
+  
+  // Draw main tank body (hull)
+  const bodyWidth = TANK_SIZE * 1.6;
+  const bodyHeight = TANK_SIZE * 1.4;
+  
+  ctx.fillStyle = tankColor;
+  ctx.fillRect(-bodyWidth/2, -bodyHeight/2, bodyWidth, bodyHeight);
+  
+  // Body outline
+  ctx.strokeStyle = isSpectating ? '#222222' : 'rgba(0, 0, 0, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-bodyWidth/2, -bodyHeight/2, bodyWidth, bodyHeight);
+  
+  ctx.restore(); // End base rotation
+  
+  // === Draw turret (independently rotated) ===
+  ctx.save();
+  ctx.rotate(turretRotation);
+  
+  // Draw turret (smaller circle on top)
+  const turretRadius = TANK_SIZE * 0.7;
+  ctx.fillStyle = tankColor;
   ctx.beginPath();
-  ctx.arc(x, y, TANK_SIZE, 0, Math.PI * 2);
+  ctx.arc(0, 0, turretRadius, 0, Math.PI * 2);
   ctx.fill();
-
-  // Draw tank barrel
-  ctx.strokeStyle = tankColor;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(
-    x + Math.cos(rotation) * (TANK_SIZE + 10),
-    y + Math.sin(rotation) * (TANK_SIZE + 10)
-  );
+  ctx.strokeStyle = isSpectating ? '#222222' : 'rgba(0, 0, 0, 0.5)';
+  ctx.lineWidth = 2;
   ctx.stroke();
+  
+  // Draw barrel
+  const barrelLength = TANK_SIZE + 10;
+  const barrelWidth = 6;
+  ctx.fillStyle = isSpectating ? '#333333' : (isPlayer ? '#0d3d0d' : (tankColor === '#4ecdc4' ? '#1a5050' : '#4d3a1a'));
+  ctx.fillRect(0, -barrelWidth/2, barrelLength, barrelWidth);
+  
+  // Barrel outline
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0, -barrelWidth/2, barrelLength, barrelWidth);
+  
+  // Barrel tip (darker)
+  ctx.fillStyle = '#222222';
+  ctx.fillRect(barrelLength - 3, -barrelWidth/2 - 1, 3, barrelWidth + 2);
+  
+  ctx.restore(); // End turret rotation
+  
+  ctx.restore(); // End translation
+  ctx.globalAlpha = opacity;
 
   // Draw health bar
   const healthPercent = tank.health / 100;
