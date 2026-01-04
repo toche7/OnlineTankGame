@@ -1226,6 +1226,11 @@ io.on('connection', (socket) => {
     if (lobby.gamePlayers[socket.id]) {
       const tank = lobby.gamePlayers[socket.id];
       
+      // Prevent spectating players from shooting
+      if (!tank.isAlive) {
+        return; // Dead/spectating players can't shoot
+      }
+      
       // Check ammo in limited ammo mode
       if (lobby.limitedAmmo) {
         if (tank.ammo <= 0) {

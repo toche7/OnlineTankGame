@@ -4,13 +4,13 @@
       "id": "player_1767450407335_gwxid4sj0",
       "username": "AKE",
       "stats": {
-        "gamesPlayed": 15,
-        "wins": 10,
-        "kills": 33,
-        "deaths": 23,
-        "totalScore": 3300,
+        "gamesPlayed": 20,
+        "wins": 11,
+        "kills": 36,
+        "deaths": 39,
+        "totalScore": 3600,
         "highestKills": 4,
-        "lastPlayed": 1767484965336
+        "lastPlayed": 1767485303191
       }
     },
     "player_1767450402290_j3799x19l": {
@@ -30,13 +30,13 @@
       "id": "player_1767447822998_1di9snr4r",
       "username": "Somchai",
       "stats": {
-        "gamesPlayed": 7,
+        "gamesPlayed": 12,
         "wins": 2,
         "kills": 6,
-        "deaths": 22,
+        "deaths": 42,
         "totalScore": 600,
         "highestKills": 3,
-        "lastPlayed": 1767484965337
+        "lastPlayed": 1767485303190
       }
     }
   }
