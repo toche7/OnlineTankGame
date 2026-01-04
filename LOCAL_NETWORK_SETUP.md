@@ -53,8 +53,8 @@
 
 2. **Player 2+** (Guests):
    - See the available games in "Server Status"
-   - Click on any waiting room to join
-   - Wait for host to start
+   - Click on any waiting lobby to join
+   - Wait for host to start the game
 
 ## Troubleshooting
 

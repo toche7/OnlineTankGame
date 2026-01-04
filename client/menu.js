@@ -643,7 +643,7 @@ socket.on('gameBrowserStatus', (data) => {
           <div class="game-item-status">${game.playerCount} player${game.playerCount !== 1 ? 's' : ''}</div>
         </div>
         <div class="game-item-badge ${game.state}">
-          ${game.state === 'playing' ? '🎮 Playing' : '⏳ Lobby'}
+          ${game.state === 'playing' ? '🎮 Playing' : '⏳ Waiting'}
         </div>
       `;
       
