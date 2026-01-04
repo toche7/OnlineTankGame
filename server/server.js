@@ -86,7 +86,9 @@ function sanitizeTank(tank) {
     activeWeapon: tank.activeWeapon,
     activePowerup: tank.activePowerup,
     isAI: tank.isAI || false,
-    aiDifficulty: tank.aiDifficulty || null
+    aiDifficulty: tank.aiDifficulty || null,
+    team: tank.team || null,
+    username: tank.username
   };
 }
 
@@ -245,20 +247,24 @@ class AIController {
       return;
     }
     
-    // Find nearest enemy
+    // Find nearest enemy (skip teammates in co-op mode)
     let nearestEnemy = null;
     let nearestDistance = Infinity;
     
     Object.values(lobby.gamePlayers).forEach(player => {
-      if (player.id !== aiTank.id && player.isAlive) {
-        const dx = player.x - aiTank.x;
-        const dy = player.y - aiTank.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        
-        if (dist < nearestDistance) {
-          nearestDistance = dist;
-          nearestEnemy = player;
-        }
+      // Skip self and dead players
+      if (player.id === aiTank.id || !player.isAlive) return;
+      
+      // Skip teammates (same team in co-op mode)
+      if (aiTank.team && player.team === aiTank.team) return;
+      
+      const dx = player.x - aiTank.x;
+      const dy = player.y - aiTank.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < nearestDistance) {
+        nearestDistance = dist;
+        nearestEnemy = player;
       }
     });
     
@@ -506,11 +512,12 @@ class AIController {
 
 // Player class
 class Tank {
-  constructor(id, obstacles, isAI = false, aiDifficulty = 'medium', persistentPlayerId = null, username = null) {
+  constructor(id, obstacles, isAI = false, aiDifficulty = 'medium', persistentPlayerId = null, username = null, team = null) {
     this.id = id; // Socket ID for real-time communication
     this.persistentPlayerId = persistentPlayerId || id; // Persistent player ID for stats
     this.username = username || `Player_${id.substr(0, 6)}`;
     this.isAI = isAI;
+    this.team = team; // 'human' or 'ai' for co-op mode, null for free-for-all
     
     // AI-specific properties
     if (isAI) {
@@ -578,35 +585,84 @@ async function checkWinConditions(gameCode) {
   if (lobby.state !== 'playing') return false;
   
   // Check if only 1 player alive (early win condition)
-  if (Object.keys(lobby.gamePlayers).length > 1) {
-    const alivePlayers = Object.values(lobby.gamePlayers).filter(p => p.isAlive);
-    if (alivePlayers.length === 1) {
-      lobby.state = 'waiting'; // Reset to waiting so players can start new game
-      lobby.gameWinner = alivePlayers[0].id;
+  // For co-op mode, check if one team is eliminated
+  if (lobby.gameMode === 'ai_coop') {
+    const aliveHumans = Object.values(lobby.gamePlayers).filter(p => p.team === 'human' && p.isAlive);
+    const aliveAI = Object.values(lobby.gamePlayers).filter(p => p.team === 'ai' && p.isAlive);
+    
+    // Don't end game if no humans have joined yet (they're still loading)
+    const totalHumans = Object.values(lobby.gamePlayers).filter(p => p.team === 'human').length;
+    if (totalHumans === 0) {
+      return false; // Wait for human players to join
+    }
+    
+    if (aliveHumans.length === 0 || aliveAI.length === 0) {
+      lobby.state = 'waiting';
+      const humanTeamWon = aliveHumans.length > 0;
+      lobby.gameWinner = humanTeamWon ? 'HUMAN_TEAM' : 'AI_TEAM';
       
-      // Save player stats
-      await saveGameStats(gameCode, lobby.gameWinner);
+      // Save stats for all human players (co-op: all humans share win/loss)
+      await saveGameStats(gameCode, humanTeamWon ? 'HUMAN_TEAM' : null);
       
-      // Clear old player socket IDs - they will rejoin with new IDs
       lobby.players = {};
-      // Keep the hostGameSocketId so we can identify the host when they rejoin
-      // Clear the game socket IDs set for next game
       if (lobby.gameSocketIds) {
         lobby.gameSocketIds.clear();
       }
       
       io.to(gameCode).emit('gameEnded', {
         winner: lobby.gameWinner,
-        reason: 'Last player standing!',
-        survivors: 1,
-        topKills: alivePlayers[0].kills,
+        reason: humanTeamWon ? 'Human team eliminated all AI bots!' : 'AI team eliminated all humans!',
+        survivors: humanTeamWon ? aliveHumans.length : aliveAI.length,
+        topKills: humanTeamWon ? Math.max(...aliveHumans.map(p => p.kills)) : 0,
         returnToLobby: true
       });
       
-      // Broadcast lobby status update
       broadcastLobbyStatus();
-      
       return true;
+    }
+  } else {
+    // Regular free-for-all mode
+    // Count human players (exclude AI)
+    const humanPlayers = Object.values(lobby.gamePlayers).filter(p => !p.isAI);
+    const aliveHumanPlayers = humanPlayers.filter(p => p.isAlive);
+    
+    // End game if:
+    // 1. Multiple human players started, and only 1 alive remains
+    // 2. OR if there are multiple players total and only 1 alive (could be AI)
+    const shouldEndGame = (humanPlayers.length > 1 && aliveHumanPlayers.length === 1) ||
+                          (Object.keys(lobby.gamePlayers).length > 1 && 
+                           Object.values(lobby.gamePlayers).filter(p => p.isAlive).length === 1);
+    
+    if (shouldEndGame) {
+      const alivePlayers = Object.values(lobby.gamePlayers).filter(p => p.isAlive);
+      if (alivePlayers.length === 1) {
+        lobby.state = 'waiting'; // Reset to waiting so players can start new game
+        lobby.gameWinner = alivePlayers[0].id;
+      
+        // Save player stats
+        await saveGameStats(gameCode, lobby.gameWinner);
+        
+        // Clear old player socket IDs - they will rejoin with new IDs
+        lobby.players = {};
+        // Keep the hostGameSocketId so we can identify the host when they rejoin
+        // Clear the game socket IDs set for next game
+        if (lobby.gameSocketIds) {
+          lobby.gameSocketIds.clear();
+        }
+        
+        io.to(gameCode).emit('gameEnded', {
+          winner: lobby.gameWinner,
+          reason: 'Last player standing!',
+          survivors: 1,
+          topKills: alivePlayers[0].kills,
+          returnToLobby: true
+        });
+        
+        // Broadcast lobby status update
+        broadcastLobbyStatus();
+        
+        return true;
+      }
     }
   }
   
@@ -669,15 +725,25 @@ async function saveGameStats(gameCode, winnerId) {
       // Calculate deaths (3 lives - remaining lives)
       const deaths = 3 - player.livesRemaining + (player.isAlive ? 0 : 1);
       
+      // For co-op mode, check if player's team won
+      let isWinner = false;
+      if (winnerId === 'HUMAN_TEAM') {
+        isWinner = player.team === 'human';
+      } else if (winnerId === 'AI_TEAM') {
+        isWinner = false; // Humans never win when AI team wins
+      } else {
+        isWinner = player.id === winnerId;
+      }
+      
       // Use persistent player ID for stats
       await db.updatePlayerStats(player.persistentPlayerId, {
         kills: player.kills || 0,
         deaths: deaths,
         score: player.score || 0,
-        isWinner: player.id === winnerId
+        isWinner: isWinner
       });
       
-      console.log(`Saved stats for player ${player.username} (${player.persistentPlayerId}): ${player.kills} kills, ${deaths} deaths, score: ${player.score}`);
+      console.log(`Saved stats for player ${player.username} (${player.persistentPlayerId}): ${player.kills} kills, ${deaths} deaths, score: ${player.score}, winner: ${isWinner}`);
     } catch (error) {
       console.error(`Error saving stats for player ${player.persistentPlayerId}:`, error);
     }
@@ -926,6 +992,15 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // Check if multiplayer mode requires at least 2 players
+    const playerCount = Object.keys(lobbies[gameCode].players).length;
+    if (gameMode === 'multiplayer' && playerCount < 2) {
+      socket.emit('lobbyError', { 
+        message: 'Multiplayer mode requires at least 2 players! Use "Solo vs AI" mode to play alone.' 
+      });
+      return;
+    }
+    
     // Check if we've reached the maximum number of concurrent games
     const activeGames = Object.values(lobbies).filter(lobby => lobby.state === 'playing').length;
     if (activeGames >= MAX_CONCURRENT_GAMES) {
@@ -961,10 +1036,14 @@ io.on('connection', (socket) => {
     if (gameMode !== 'multiplayer') {
       numAI = Math.min(Math.max(1, aiCount), 9); // Clamp between 1-9
       
+      console.log(`\n=== SPAWNING AI FOR GAME MODE: ${gameMode} ===`);
+      
       for (let i = 0; i < numAI; i++) {
         const aiId = `ai_${gameCode}_${i}`;
-        const aiTank = new Tank(aiId, lobbies[gameCode].gameObstacles, true, aiDifficulty);
+        const aiTeam = gameMode === 'ai_coop' ? 'ai' : null; // Set team for co-op mode
+        const aiTank = new Tank(aiId, lobbies[gameCode].gameObstacles, true, aiDifficulty, null, null, aiTeam);
         lobbies[gameCode].gamePlayers[aiId] = aiTank;
+        console.log(`Spawned AI ${aiId} with team: ${aiTeam}, difficulty: ${aiDifficulty}`);
       }
       
       console.log(`Spawned ${numAI} AI tanks with difficulty ${aiDifficulty} for game ${gameCode}`);
@@ -1071,8 +1150,10 @@ io.on('connection', (socket) => {
     // Create new tank for player if not exists
     const lobby = lobbies[gameCode];
     if (!lobby.gamePlayers[socket.id]) {
-      const tank = new Tank(socket.id, lobby.gameObstacles, false, 'medium', persistentPlayerId, username);
+      const playerTeam = lobby.gameMode === 'ai_coop' ? 'human' : null; // Set team for co-op mode
+      const tank = new Tank(socket.id, lobby.gameObstacles, false, 'medium', persistentPlayerId, username, playerTeam);
       lobby.gamePlayers[socket.id] = tank;
+      console.log(`Created tank for player ${username} (${socket.id}), team: ${playerTeam}, gameMode: ${lobby.gameMode}, isAlive: ${tank.isAlive}`);
       console.log(`Created tank for player ${username} (${socket.id}), isAlive: ${tank.isAlive}`);
     }
 
@@ -1290,18 +1371,23 @@ io.on('connection', (socket) => {
     console.log('Player disconnected:', socket.id);
     
     const gameCode = socket.gameCode;
-    
-    // Remove from lobby game players if in a game
-    if (gameCode && lobbies[gameCode]) {
-      delete lobbies[gameCode].gamePlayers[socket.id];
-      if (lobbies[gameCode].playersReadyToRestart) {
-        lobbies[gameCode].playersReadyToRestart.delete(socket.id);
-      }
-    }
+    console.log(`Disconnect - gameCode: ${gameCode}, has lobby: ${!!(gameCode && lobbies[gameCode])}, lobby state: ${lobbies[gameCode]?.state}`);
     
     // Handle lobby cleanup
     if (gameCode && lobbies[gameCode]) {
       const wasInLobby = lobbies[gameCode].players[socket.id];
+      
+      // Only delete from gamePlayers if game is NOT in playing state (to allow page transitions)
+      // If playing, keep them in gamePlayers as they're just transitioning to game.html
+      if (lobbies[gameCode].state !== 'playing') {
+        console.log(`Deleting ${socket.id} from gamePlayers (state: ${lobbies[gameCode].state})`);
+        delete lobbies[gameCode].gamePlayers[socket.id];
+        if (lobbies[gameCode].playersReadyToRestart) {
+          lobbies[gameCode].playersReadyToRestart.delete(socket.id);
+        }
+      } else {
+        console.log(`Keeping ${socket.id} in gamePlayers during page transition (state: ${lobbies[gameCode].state})`);
+      }
       
       // Only handle lobby cleanup if game is NOT playing (waiting state)
       // If playing, players are just transitioning to game page with new socket IDs
@@ -1612,8 +1698,18 @@ setInterval(() => {
         const dx = lobby.gameProjectiles[i].x - tank.x;
         const dy = lobby.gameProjectiles[i].y - tank.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Get shooter tank to check teams
+        const shooterTank = lobby.gamePlayers[lobby.gameProjectiles[i].playerId];
+        
+        // Check friendly fire: skip if same team (co-op mode)
+        const isFriendlyFire = shooterTank && tank.team && shooterTank.team === tank.team;
+        
+        if (i < lobby.gameProjectiles.length && shooterTank && tank.team) {
+          console.log(`Projectile check: shooter ${shooterTank.id} (team: ${shooterTank.team}) -> target ${tank.id} (team: ${tank.team}), friendlyFire: ${isFriendlyFire}`);
+        }
 
-        if (distance < TANK_SIZE + PROJECTILE_SIZE && lobby.gameProjectiles[i].playerId !== playerId) {
+        if (distance < TANK_SIZE + PROJECTILE_SIZE && lobby.gameProjectiles[i].playerId !== playerId && !isFriendlyFire) {
           hitTank = true;
           const killerPlayerId = lobby.gameProjectiles[i].playerId;
           const hitX = lobby.gameProjectiles[i].x;
@@ -1688,7 +1784,8 @@ setInterval(() => {
                 killerScore: killerTank ? killerTank.score : 0
               });
             }
-          }        }
+          }
+        }
       });
     }
 

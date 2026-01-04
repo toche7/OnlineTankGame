@@ -608,8 +608,18 @@ function drawTank(tank, isPlayer) {
   // Check if this is an AI tank
   const isAI = tank.isAI || (tank.id && tank.id.startsWith('ai_'));
   
-  // Determine tank color based on player status
-  let tankColor = isPlayer ? '#00ff00' : isAI ? '#ff9900' : '#ff0000'; // Orange for AI
+  // Determine tank color based on team and player status
+  let tankColor;
+  if (isPlayer) {
+    tankColor = '#00ff00'; // Green for player
+  } else if (tank.team === 'human') {
+    tankColor = '#0088ff'; // Blue for human teammates (co-op mode)
+  } else if (tank.team === 'ai' || isAI) {
+    tankColor = '#ff0000'; // Red for AI enemies (co-op mode)
+  } else {
+    tankColor = '#ff0000'; // Red for other players (free-for-all)
+  }
+  
   const isSpectating = !tank.isAlive;
   const opacity = isSpectating ? 0.5 : 1;
   
