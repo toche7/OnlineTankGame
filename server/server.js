@@ -2047,11 +2047,16 @@ setInterval(() => {
 }, 1000 / UPDATE_RATE);
 
 const PORT = process.env.PORT || 3000;
+const VERSION = '1.0.0';
+
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`\n========================================`);
+  console.log(`🎮 Cannon Clash Server v${VERSION}`);
+  console.log(`========================================`);
+  console.log(`Port: ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   if (process.env.RAILWAY_ENVIRONMENT) {
-    console.log(`Railway deployment detected`);
+    console.log(`Platform: Railway`);
   } else {
     console.log(`Local access: http://localhost:${PORT}`);
   }
