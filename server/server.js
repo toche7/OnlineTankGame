@@ -635,10 +635,10 @@ async function checkWinConditions(gameCode) {
         reason: humanTeamWon ? 'Human team eliminated all AI bots!' : 'AI team eliminated all humans!',
         survivors: humanTeamWon ? aliveHumans.length : aliveAI.length,
         topKills: humanTeamWon ? Math.max(...aliveHumans.map(p => p.kills)) : 0,
-        returnToLobby: true
+        returnToMenu: true
       });
       
-      broadcastLobbyStatus();
+      broadcastGameBrowserStatus();
       return true;
     }
   } else if (lobby.gameMode === 'team_pvp') {
@@ -672,10 +672,10 @@ async function checkWinConditions(gameCode) {
         reason: redTeamWon ? 'Team A eliminated all Team B players!' : 'Team B eliminated all Team A players!',
         survivors: redTeamWon ? aliveRedTeam.length : aliveBlueTeam.length,
         topKills: redTeamWon ? Math.max(...aliveRedTeam.map(p => p.kills)) : Math.max(...aliveBlueTeam.map(p => p.kills)),
-        returnToLobby: true
+        returnToMenu: true
       });
       
-      broadcastLobbyStatus();
+      broadcastGameBrowserStatus();
       return true;
     }
   } else {
@@ -713,11 +713,11 @@ async function checkWinConditions(gameCode) {
           reason: 'Last player standing!',
           survivors: 1,
           topKills: alivePlayers[0].kills,
-          returnToLobby: true
+          returnToMenu: true
         });
         
-        // Broadcast lobby status update
-        broadcastLobbyStatus();
+        // Broadcast game browser status update
+        broadcastGameBrowserStatus();
         
         return true;
       }
@@ -758,11 +758,11 @@ async function checkWinConditions(gameCode) {
       reason: 'Time limit reached! Winner has most kills.',
       survivors: allPlayers.length,
       topKills: topKills,
-      returnToLobby: true
+      returnToMenu: true
     });
     
-    // Broadcast lobby status update
-    broadcastLobbyStatus();
+    // Broadcast game browser status update
+    broadcastGameBrowserStatus();
     
     return true;
   }
@@ -829,21 +829,21 @@ async function saveGameStats(gameCode, winnerId, gameEndReason = 'Game ended') {
 }
 
 
-// Broadcast lobby status to all clients
-function broadcastLobbyStatus() {
+// Broadcast game browser status to all clients
+function broadcastGameBrowserStatus() {
   const playingGames = Object.values(lobbies).filter(l => l.state === 'playing').length;
-  const waitingRooms = Object.values(lobbies).filter(l => l.state === 'waiting').length;
+  const waitingLobbies = Object.values(lobbies).filter(l => l.state === 'waiting').length;
   
-  const lobbiesList = Object.keys(lobbies).map(code => ({
+  const gamesList = Object.keys(lobbies).map(code => ({
     code: code,
     state: lobbies[code].state,
     playerCount: Object.keys(lobbies[code].players).length
   }));
   
-  io.emit('lobbyStatus', {
+  io.emit('gameBrowserStatus', {
     playing: playingGames,
-    waiting: waitingRooms,
-    lobbies: lobbiesList
+    waiting: waitingLobbies,
+    games: gamesList
   });
 }
 
@@ -851,21 +851,21 @@ function broadcastLobbyStatus() {
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
   
-  // Send lobby status when requested
-  socket.on('requestLobbyStatus', () => {
+  // Send game browser status when requested
+  socket.on('requestGameBrowserStatus', () => {
     const playingGames = Object.values(lobbies).filter(l => l.state === 'playing').length;
-    const waitingRooms = Object.values(lobbies).filter(l => l.state === 'waiting').length;
+    const waitingLobbies = Object.values(lobbies).filter(l => l.state === 'waiting').length;
     
-    const lobbiesList = Object.keys(lobbies).map(code => ({
+    const gamesList = Object.keys(lobbies).map(code => ({
       code: code,
       state: lobbies[code].state,
       playerCount: Object.keys(lobbies[code].players).length
     }));
     
-    socket.emit('lobbyStatus', {
+    socket.emit('gameBrowserStatus', {
       playing: playingGames,
-      waiting: waitingRooms,
-      lobbies: lobbiesList
+      waiting: waitingLobbies,
+      games: gamesList
     });
   });
   
@@ -919,8 +919,8 @@ io.on('connection', (socket) => {
       gameMode: lobbies[gameCode].gameMode
     });
     
-    // Broadcast lobby status update to all connected clients
-    broadcastLobbyStatus();
+    // Broadcast game browser status update to all connected clients
+    broadcastGameBrowserStatus();
     
     console.log(`Game ${gameCode} created by ${username} (${socket.id})`);
   });
@@ -961,8 +961,8 @@ io.on('connection', (socket) => {
       gameMode: lobbies[gameCode].gameMode || 'multiplayer'
     });
     
-    // Notify other players in lobby
-    socket.to(gameCode).emit('playerJoinedLobby', {
+    // Notify other players in game
+    socket.to(gameCode).emit('playerJoinedGame', {
       playerId: socket.id,
       players: lobbies[gameCode].players
     });
@@ -979,7 +979,7 @@ io.on('connection', (socket) => {
     }
     
     console.log(`\n=== REJOIN DEBUG ===`);
-    console.log(`Player ${socket.id} rejoining lobby ${gameCode}`);
+    console.log(`Player ${socket.id} rejoining game ${gameCode}`);
     console.log(`Old socket ID: ${data.oldSocketId}`);
     console.log(`Player ID: ${data.playerId}`);
     console.log(`Current hostGameSocketId: ${lobbies[gameCode].hostGameSocketId}`);
@@ -1003,7 +1003,7 @@ io.on('connection', (socket) => {
     if (data.oldSocketId && lobbies[gameCode].players[data.oldSocketId]) {
       oldPlayerData = lobbies[gameCode].players[data.oldSocketId];
       delete lobbies[gameCode].players[data.oldSocketId];
-      console.log(`Removed old socket ID ${data.oldSocketId} from lobby ${gameCode}, saved team: ${oldPlayerData.team}`);
+      console.log(`Removed old socket ID ${data.oldSocketId} from game ${gameCode}, saved team: ${oldPlayerData.team}`);
     }
     
     // If old host rejoins, maintain host status and update originalHost
@@ -1017,18 +1017,18 @@ io.on('connection', (socket) => {
       lobbies[gameCode].originalHost = socket.id;
       lobbies[gameCode].hostGameSocketId = null; // Reset for next game
       lobbies[gameCode].hostGamePlayerId = null; // Reset for next game
-      console.log(`Original host ${socket.id} reclaimed host status in lobby ${gameCode}`);
+      console.log(`Original host ${socket.id} reclaimed host status in game ${gameCode}`);
     } else if (Object.keys(lobbies[gameCode].players).length === 0 && !lobbies[gameCode].hostGamePlayerId) {
       // Only assign host to first rejoiner if there's NO hostGamePlayerId set
       // (meaning no one was ever the host in the game)
       lobbies[gameCode].host = socket.id;
       lobbies[gameCode].originalHost = socket.id;
       lobbies[gameCode].originalHostPlayerId = data.playerId; // Update for future rejoins
-      console.log(`First player ${socket.id} rejoining empty lobby ${gameCode}, assigning as host`);
+      console.log(`First player ${socket.id} rejoining empty game ${gameCode}, assigning as host`);
     } else if (Object.keys(lobbies[gameCode].players).length === 0 && lobbies[gameCode].hostGamePlayerId) {
-      // If lobby is empty but hostGamePlayerId exists, keep waiting for the original host
+      // If game is empty but hostGamePlayerId exists, keep waiting for the original host
       // Don't assign anyone as host yet
-      console.log(`Lobby ${gameCode} waiting for original host (playerId: ${lobbies[gameCode].hostGamePlayerId}) to rejoin`);
+      console.log(`Game ${gameCode} waiting for original host (playerId: ${lobbies[gameCode].hostGamePlayerId}) to rejoin`);
     }
     
     const isHost = lobbies[gameCode].host === socket.id;
@@ -1057,9 +1057,9 @@ io.on('connection', (socket) => {
       gameMode: lobbies[gameCode].gameMode || 'multiplayer'
     });
     
-    // Notify ALL players in lobby (including the rejoining player)
+    // Notify ALL players in game (including the rejoining player)
     // This ensures everyone has the correct host status
-    io.to(gameCode).emit('playerJoinedLobby', {
+    io.to(gameCode).emit('playerJoinedGame', {
       playerId: socket.id,
       players: lobbies[gameCode].players
     });
@@ -1187,8 +1187,8 @@ io.on('connection', (socket) => {
       }
     }, 1000);
     
-    // Broadcast lobby status update
-    broadcastLobbyStatus();
+    // Broadcast game browser status update
+    broadcastGameBrowserStatus();
     
     console.log(`Game ${gameCode} started with settings:`, {
       tankSpeed,
@@ -1201,7 +1201,7 @@ io.on('connection', (socket) => {
     });
   });
   
-  socket.on('leaveLobby', (data) => {
+  socket.on('leaveGame', (data) => {
     const gameCode = data.gameCode;
     
     if (!lobbies[gameCode]) return;
@@ -1211,17 +1211,17 @@ io.on('connection', (socket) => {
     socket.leave(gameCode);
     
     if (Object.keys(lobbies[gameCode].players).length === 0) {
-      // Delete lobby if empty
+      // Delete game session if empty
       delete lobbies[gameCode];
-      console.log(`Lobby ${gameCode} deleted (empty)`);
-      broadcastLobbyStatus();
+      console.log(`Game ${gameCode} deleted (empty)`);
+      broadcastGameBrowserStatus();
     } else if (wasHost) {
       // Assign new host
       const newHost = Object.keys(lobbies[gameCode].players)[0];
       lobbies[gameCode].host = newHost;
       lobbies[gameCode].players[newHost].isHost = true;
       
-      io.to(gameCode).emit('playerLeftLobby', {
+      io.to(gameCode).emit('playerLeftGame', {
         playerId: socket.id,
         players: lobbies[gameCode].players,
         newHost: newHost
@@ -1229,7 +1229,7 @@ io.on('connection', (socket) => {
       
       console.log(`New host for ${gameCode}: ${newHost}`);
     } else {
-      io.to(gameCode).emit('playerLeftLobby', {
+      io.to(gameCode).emit('playerLeftGame', {
         playerId: socket.id,
         players: lobbies[gameCode].players
       });
@@ -1266,7 +1266,7 @@ io.on('connection', (socket) => {
         players: lobby.players
       });
       
-      console.log(`Player ${socket.id} changed to ${team} in lobby ${gameCode}`);
+      console.log(`Player ${socket.id} changed to ${team} in game ${gameCode}`);
     }
   });
 
@@ -1283,12 +1283,12 @@ io.on('connection', (socket) => {
     
     // Only host can change settings
     if (lobby.host !== socket.id) {
-      socket.emit('lobbyError', { message: 'Only host can change game settings' });
+      socket.emit('gameError', { message: 'Only host can change game settings' });
       return;
     }
     
     if (lobby.state !== 'waiting') {
-      socket.emit('lobbyError', { message: 'Cannot change settings while game is in progress' });
+      socket.emit('gameError', { message: 'Cannot change settings while game is in progress' });
       return;
     }
     
@@ -1296,12 +1296,12 @@ io.on('connection', (socket) => {
     if (gameMode !== undefined) {
       lobby.gameMode = gameMode;
       
-      // Broadcast to all players in the lobby
+      // Broadcast to all players in the game
       io.to(gameCode).emit('gameSettingsUpdated', {
         gameMode: gameMode
       });
       
-      console.log(`Game mode changed to ${gameMode} in lobby ${gameCode}`);
+      console.log(`Game mode changed to ${gameMode} in game ${gameCode}`);
     }
   });
 
@@ -1346,14 +1346,14 @@ io.on('connection', (socket) => {
     console.log(`Lobby exists: ${!!lobbies[gameCode]}, State: ${lobbies[gameCode]?.state}`);
     
     if (!gameCode || !lobbies[gameCode]) {
-      console.log(`Lobby ${gameCode} not found, redirecting to lobby`);
-      socket.emit('redirectToLobby');
+      console.log(`Game ${gameCode} not found, redirecting to menu`);
+      socket.emit('redirectToMenu');
       return;
     }
     
     if (lobbies[gameCode].state !== 'playing') {
       console.log(`Game ${gameCode} state is ${lobbies[gameCode].state}, not playing. Redirecting.`);
-      socket.emit('redirectToLobby');
+      socket.emit('redirectToMenu');
       return;
     }
     
@@ -1505,12 +1505,19 @@ io.on('connection', (socket) => {
       return;
     }
     
-    if (gameState === 'finished' || lobbies[gameCode].state === 'finished') {
-      playersReadyToRestart.add(socket.id);
+    const lobby = lobbies[gameCode];
+    
+    if (lobby.state === 'finished' || lobby.state === 'waiting') {
+      // Use per-lobby playersReadyToRestart
+      if (!lobby.playersReadyToRestart) {
+        lobby.playersReadyToRestart = new Set();
+      }
       
-      // Count players currently in the game
-      const currentPlayers = Object.keys(players);
-      const readyPlayers = Array.from(playersReadyToRestart).filter(id => currentPlayers.includes(id));
+      lobby.playersReadyToRestart.add(socket.id);
+      
+      // Count players currently in the lobby
+      const currentPlayers = Object.keys(lobby.players);
+      const readyPlayers = Array.from(lobby.playersReadyToRestart).filter(id => currentPlayers.includes(id));
       
       console.log(`Player ${socket.id} ready to restart. ${readyPlayers.length}/${currentPlayers.length} ready`);
       
@@ -1524,52 +1531,74 @@ io.on('connection', (socket) => {
       if (readyPlayers.length >= currentPlayers.length && currentPlayers.length > 0) {
         console.log('All players ready! Restarting game...');
         
-        // Reset game state
-        gameState = 'running';
-        gameStartTime = null;
-        gameWinner = null;
-        projectiles.length = 0;
-        playersReadyToRestart.clear();
-        lobbies[gameCode].state = 'playing';
-        lobbies[gameCode].gameStartTime = Date.now();
+        // Clear the ready set
+        lobby.playersReadyToRestart.clear();
+        
+        // Reset lobby state
+        lobby.state = 'playing';
+        lobby.gameStartTime = Date.now();
+        lobby.gameWinner = null;
+        
+        // IMPORTANT: Maintain host tracking across restart
+        // The lobby.players should still be intact from when they were in the waiting room
+        // Ensure the host is still marked correctly
+        // DON'T clear hostGameSocketId and hostGamePlayerId - we need them for rejoin after next game end
+        console.log(`Maintaining host status during restart. Host: ${lobby.host}, Original Host: ${lobby.originalHost}`);
+        console.log(`Keeping hostGamePlayerId: ${lobby.hostGamePlayerId} for next game end/rejoin`);
+        
+        // Clear projectiles for this lobby
+        if (lobby.gameProjectiles) {
+          lobby.gameProjectiles.length = 0;
+        } else {
+          lobby.gameProjectiles = [];
+        }
         
         // Reset all players' status for the new game
-        Object.values(players).forEach(player => {
+        Object.values(lobby.gamePlayers || {}).forEach(player => {
           player.isAlive = true;
           player.health = TANK_MAX_HEALTH;
           player.score = 0;
           player.kills = 0;
+          player.deaths = 0;
           player.livesRemaining = 3;
           player.velocityX = 0;
           player.velocityY = 0;
+          player.activeWeapon = null;
+          player.activePowerup = null;
+          player.ammo = lobby.limitedAmmo ? 20 : Infinity;
           
           // Respawn at random valid location
           let validSpawn = false;
-          while (!validSpawn) {
+          let attempts = 0;
+          while (!validSpawn && attempts < 50) {
             player.x = Math.random() * GAME_WIDTH;
             player.y = Math.random() * GAME_HEIGHT;
             validSpawn = true;
             
-            for (let obs of generatedObstacles) {
-              if (obs.collidesWith(player.x, player.y, TANK_SIZE)) {
-                validSpawn = false;
-                break;
+            if (lobby.gameObstacles) {
+              for (let obs of lobby.gameObstacles) {
+                if (obs.collidesWith(player.x, player.y, TANK_SIZE)) {
+                  validSpawn = false;
+                  break;
+                }
               }
             }
+            attempts++;
           }
         });
         
-        // Start new game
-        gameStartTime = Date.now();
-        gameState = 'running';
+        // Generate new obstacles for the new game
+        lobby.gameObstacles = generateObstacles();
         
         // Send updated game state with reset players to all clients
-        io.to(gameCode).emit('gameStarted', {
-          startTime: gameStartTime,
+        io.to(gameCode).emit('gameRestarted', {
+          startTime: lobby.gameStartTime,
           gameDuration: GAME_DURATION,
-          players: players // Send updated player data
+          players: sanitizePlayers(lobby.gamePlayers),
+          obstacles: lobby.gameObstacles
         });
-        console.log('New game started!');
+        
+        console.log(`Game ${gameCode} restarted!`);
       }
     }
   });
@@ -1641,16 +1670,16 @@ io.on('connection', (socket) => {
         delete lobbies[gameCode].players[socket.id];
         
         if (Object.keys(lobbies[gameCode].players).length === 0) {
-          // Delete lobby if empty
+          // Delete game session if empty
           delete lobbies[gameCode];
-          console.log(`Lobby ${gameCode} deleted (empty)`);
+          console.log(`Game ${gameCode} deleted (empty)`);
         } else if (wasHost) {
           // Assign new host if in waiting state
           const newHost = Object.keys(lobbies[gameCode].players)[0];
           lobbies[gameCode].host = newHost;
           lobbies[gameCode].players[newHost].isHost = true;
           
-          io.to(gameCode).emit('playerLeftLobby', {
+          io.to(gameCode).emit('playerLeftGame', {
             playerId: socket.id,
             players: lobbies[gameCode].players,
             newHost: newHost
@@ -1659,18 +1688,18 @@ io.on('connection', (socket) => {
           console.log(`New host for ${gameCode}: ${newHost}`);
         } else {
           // Just notify about player leaving
-          io.to(gameCode).emit('playerLeftLobby', {
+          io.to(gameCode).emit('playerLeftGame', {
             playerId: socket.id,
             players: lobbies[gameCode].players
           });
         }
       } else if (wasInLobby && lobbies[gameCode].state === 'playing') {
-        // Player left during active game - DON'T remove from lobby players list
-        // They might be transitioning back to lobby after game ends
-        console.log(`Player ${socket.id} disconnected during active game in lobby ${gameCode}.`);
+        // Player left during active game - DON'T remove from game session players list
+        // They might be transitioning back to menu after game ends
+        console.log(`Player ${socket.id} disconnected during active game ${gameCode}.`);
       } else if (wasInLobby && lobbies[gameCode].state === 'finished') {
-        // Game is finished, player might be transitioning back to lobby
-        console.log(`Player ${socket.id} disconnected from finished game in lobby ${gameCode}.`);
+        // Game is finished, player might be transitioning back to menu
+        console.log(`Player ${socket.id} disconnected from finished game ${gameCode}.`);
       }
     }
     
@@ -2047,7 +2076,7 @@ setInterval(() => {
 }, 1000 / UPDATE_RATE);
 
 const PORT = process.env.PORT || 3000;
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n========================================`);

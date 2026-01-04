@@ -16,11 +16,11 @@ window.addEventListener('DOMContentLoaded', () => {
     backBtn.addEventListener('click', (e) => {
       e.preventDefault();
       if (gameCode && oldSocketId) {
-        // Rejoin the game lobby
-        window.location.href = `/lobby.html?rejoin=${gameCode}&oldSocketId=${oldSocketId}`;
+        // Rejoin the game
+        window.location.href = `/menu.html?rejoin=${gameCode}&oldSocketId=${oldSocketId}`;
       } else {
-        // Just go to lobby
-        window.location.href = '/lobby.html';
+        // Just go to menu
+        window.location.href = '/menu.html';
       }
     });
   }

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cannon Clash - Lobby</title>
-  <link rel="stylesheet" href="lobby.css">
+  <title>Cannon Clash - Menu</title>
+  <link rel="stylesheet" href="menu.css">
 </head>
 <body>
   <div class="container">
@@ -20,23 +20,22 @@
       </div>
     </div>
     
-    <div class="lobby-section">
-      <h2>Game Lobby</h2>
+    <div class="menu-section">
+      <h2>Game Browser</h2>
       
-      <div id="lobbyState" class="lobby-state">
-        <div id="waitingRoom" class="waiting-room hidden">
-          <h3>Waiting Room</h3>
-          <div class="game-info">
-            <p>Game Code: <span id="gameCode" class="game-code">-</span></p>
-            <p>Players: <span id="playerCount">0</span>/10</p>
-          </div>
-          
-          <div class="players-list">
-            <h4>Players in Lobby:</h4>
-            <ul id="playersList"></ul>
-          </div>
-          
-          <div id="hostControls" class="host-controls hidden">
+      <div id="waitingRoom" class="waiting-room hidden">
+        <h3>Lobby</h3>
+        <div class="game-info">
+          <p>Game Code: <span id="gameCode" class="game-code">-</span></p>
+          <p>Players: <span id="playerCount">0</span>/10</p>
+        </div>
+        
+        <div class="players-list">
+          <h4>Players:</h4>
+          <ul id="playersList"></ul>
+        </div>
+        
+        <div id="hostControls" class="host-controls hidden">
             <div class="game-settings">
               <label for="tankSpeed">Tank Speed:</label>
               <select id="tankSpeed">
@@ -126,12 +125,12 @@
             <p class="waiting-message">⏳ Waiting for host to start the game...</p>
           </div>
           
-          <button id="leaveLobbyBtn" class="btn btn-secondary">Leave Lobby</button>
-        </div>
-        
-        <div id="lobbyMenu" class="lobby-menu">
-          <!-- Active Games Display -->
-          <div class="server-status">
+          <button id="leaveLobbyBtn" class="btn btn-secondary">Leave Game</button>
+      </div>
+      
+      <div id="menuView" class="menu-view">
+        <!-- Active Games Display -->
+        <div class="server-status">
             <h3>🎮 Server Status</h3>
             <div class="status-grid">
               <div class="status-item">
@@ -149,14 +148,13 @@
           <button id="createGameBtn" class="btn btn-large btn-primary">Create New Game</button>
           <div class="divider">OR</div>
           <div class="join-section">
-            <p class="join-instruction">👆 Click on any waiting room above to join</p>
+            <p class="join-instruction">👆 Click on any lobby above to join</p>
           </div>
-        </div>
       </div>
-      
-      <div id="errorMessage" class="error-message hidden"></div>
-      <div id="statusMessage" class="status-message hidden"></div>
     </div>
+    
+    <div id="errorMessage" class="error-message hidden"></div>
+    <div id="statusMessage" class="status-message hidden"></div>
     
     <!-- Username Modal -->
     <div id="usernameModal" class="modal hidden">
@@ -214,11 +212,11 @@
     </div>
   </div>
   
-  <footer style="text-align: center; padding: 20px; color: #888; font-size: 0.9em; margin-top: 20px;">
-    Cannon Clash v1.0.0
-  </footer>
-  
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="lobby.js"></script>
+  <div class="version-footer">
+    Cannon Clash v1.1.0
+  </div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="menu.js"></script>
 </body>
 </html>

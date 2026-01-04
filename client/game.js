@@ -7,9 +7,9 @@ const urlParams = new URLSearchParams(window.location.search);
 const gameCode = urlParams.get('code');
 const wasHost = urlParams.get('wasHost') === 'true';
 
-// Redirect to lobby if no game code
+// Redirect to menu if no game code
 if (!gameCode) {
-  window.location.href = '/lobby.html';
+  window.location.href = '/menu.html';
 }
 
 let gameState = {
@@ -50,10 +50,10 @@ socket.on('connect', () => {
   });
 });
 
-// Handle redirect to lobby if game not valid
-socket.on('redirectToLobby', () => {
+// Handle redirect to menu if game not valid
+socket.on('redirectToMenu', () => {
   alert('Game session not found or has not started yet.');
-  window.location.href = '/lobby.html';
+  window.location.href = '/menu.html';
 });
 
 
@@ -320,6 +320,39 @@ socket.on('gameStarted', (data) => {
   console.log('Game started!', 'Players:', Object.keys(gameState.players).length);
 });
 
+socket.on('gameRestarted', (data) => {
+  console.log('Game restarted!', data);
+  
+  // Reset game state
+  gameState.gameStartTime = data.startTime;
+  gameState.gameDuration = data.gameDuration;
+  gameState.gameFinished = false;
+  gameState.players = data.players;
+  gameState.projectiles = [];
+  gameState.weapons = [];
+  gameState.powerups = [];
+  gameState.obstacles = data.obstacles || [];
+  
+  // Hide finish screen
+  const finishScreen = document.getElementById('finishScreen');
+  if (finishScreen) {
+    finishScreen.classList.add('hidden');
+  }
+  
+  // Re-enable restart button
+  const restartBtn = document.getElementById('restartBtn');
+  if (restartBtn) {
+    restartBtn.textContent = 'Restart Game';
+    restartBtn.disabled = false;
+  }
+  
+  // Restart background music
+  startBackgroundMusic();
+  
+  updatePlayerCount();
+  console.log('Game restarted! Players:', Object.keys(gameState.players).length);
+});
+
 socket.on('restartProgress', (data) => {
   const restartBtn = document.getElementById('restartBtn');
   if (restartBtn) {
@@ -331,11 +364,11 @@ socket.on('gameEnded', (data) => {
   gameState.gameFinished = true;
   stopBackgroundMusic();
   
-  if (data.returnToLobby) {
-    // Show results briefly then return to lobby with game code
+  if (data.returnToMenu) {
+    // Show results briefly then return to menu with game code
     showFinishScreen(data);
     setTimeout(() => {
-      window.location.href = `/lobby.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
+      window.location.href = `/menu.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
     }, 5000); // Show results for 5 seconds
   } else {
     showFinishScreen(data);
@@ -1117,9 +1150,9 @@ function showFinishScreen(data) {
     `;
   }
 
-  // Hide restart button if returning to lobby
+  // Hide restart button if returning to menu
   const restartBtn = document.getElementById('restartBtn');
-  if (data.returnToLobby && restartBtn) {
+  if (data.returnToMenu && restartBtn) {
     restartBtn.style.display = 'none';
   }
 
@@ -1179,7 +1212,7 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 });
 
 document.getElementById('closeBtn').addEventListener('click', () => {
-  window.location.href = `/lobby.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
+  window.location.href = `/menu.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
 });
 
 // Start game loop

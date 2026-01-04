@@ -65,13 +65,13 @@ Railway should auto-detect your settings, but verify:
 2. Click **"Generate Domain"** if no URL is shown in the Settings tab
 
 3. Your game will be accessible at:
-   - Lobby: `https://your-app-name.up.railway.app/lobby.html`
+   - Menu: `https://your-app-name.up.railway.app/menu.html`
    - Stats: `https://your-app-name.up.railway.app/stats.html`
 
 ## Step 5: Test Your Deployment
 
 1. Open your Railway URL in a browser
-2. Navigate to `/lobby.html`
+2. Navigate to `/menu.html`
 3. Create a game and test functionality
 4. Have friends join from different locations to test multiplayer
 

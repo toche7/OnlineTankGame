@@ -19,7 +19,7 @@ if (!username) {
 
 let currentGameCode = null;
 let isHost = false;
-let playersInLobby = {};
+let playersInGame = {};
 
 // Last game data
 let lastGameData = null;
@@ -154,7 +154,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (rejoinCode) {
     // Wait for socket to connect before rejoining
     socket.on('connect', () => {
-      console.log('Auto-rejoining lobby:', rejoinCode);
+      console.log('Auto-rejoining game:', rejoinCode);
       socket.emit('rejoinLobby', { 
         gameCode: rejoinCode, 
         oldSocketId: oldSocketId,
@@ -163,25 +163,25 @@ window.addEventListener('DOMContentLoaded', () => {
       });
       
       // Clear the URL parameters
-      window.history.replaceState({}, document.title, '/lobby.html');
+      window.history.replaceState({}, document.title, '/menu.html');
     });
   } else {
-    // Request lobby status when page loads
+    // Request game browser status when page loads
     socket.on('connect', () => {
-      socket.emit('requestLobbyStatus');
+      socket.emit('requestGameBrowserStatus');
     });
   }
 });
 
-// Request lobby status every 5 seconds when on main menu
+// Request game browser status every 5 seconds when on main menu
 setInterval(() => {
-  if (lobbyMenu && !lobbyMenu.classList.contains('hidden')) {
-    socket.emit('requestLobbyStatus');
+  if (menuView && !menuView.classList.contains('hidden')) {
+    socket.emit('requestGameBrowserStatus');
   }
 }, 5000);
 
 // DOM Elements
-const lobbyMenu = document.getElementById('lobbyMenu');
+const menuView = document.getElementById('menuView');
 const waitingRoom = document.getElementById('waitingRoom');
 const createGameBtn = document.getElementById('createGameBtn');
 const startGameBtn = document.getElementById('startGameBtn');
@@ -382,11 +382,11 @@ startGameBtn.addEventListener('click', () => {
   }
 });
 
-// Leave lobby
+// Leave game
 leaveLobbyBtn.addEventListener('click', () => {
   if (currentGameCode) {
-    socket.emit('leaveLobby', { gameCode: currentGameCode });
-    resetLobby();
+    socket.emit('leaveGame', { gameCode: currentGameCode });
+    resetMenu();
   }
 });
 
@@ -421,7 +421,7 @@ if (lastGameModal) {
 socket.on('gameCreated', (data) => {
   currentGameCode = data.gameCode;
   isHost = true;
-  playersInLobby = data.players;
+  playersInGame = data.players;
   
   showWaitingRoom();
   gameCodeDisplay.textContent = currentGameCode;
@@ -442,10 +442,10 @@ socket.on('gameCreated', (data) => {
 
 socket.on('gameJoined', (data) => {
   currentGameCode = data.gameCode;
-  playersInLobby = data.players;
+  playersInGame = data.players;
   
   // Check if this player is the host
-  isHost = playersInLobby[socket.id]?.isHost || false;
+  isHost = playersInGame[socket.id]?.isHost || false;
   
   showWaitingRoom();
   gameCodeDisplay.textContent = currentGameCode;
@@ -469,12 +469,12 @@ socket.on('gameJoined', (data) => {
   }
 });
 
-socket.on('playerJoinedLobby', (data) => {
-  playersInLobby = data.players;
+socket.on('playerJoinedGame', (data) => {
+  playersInGame = data.players;
   
   // Check if our host status has changed
   const wasHost = isHost;
-  isHost = playersInLobby[socket.id]?.isHost || false;
+  isHost = playersInGame[socket.id]?.isHost || false;
   
   // Update UI if host status changed
   if (wasHost && !isHost) {
@@ -492,11 +492,11 @@ socket.on('playerJoinedLobby', (data) => {
   }
   
   updatePlayersList();
-  showStatus(`${data.playerName || 'A player'} joined the lobby`);
+  showStatus(`${data.playerName || 'A player'} joined`);
 });
 
-socket.on('playerLeftLobby', (data) => {
-  playersInLobby = data.players;
+socket.on('playerLeftGame', (data) => {
+  playersInGame = data.players;
   updatePlayersList();
   
   if (data.newHost && data.newHost === socket.id) {
@@ -517,18 +517,18 @@ socket.on('gameStarting', (data) => {
   }, 500);
 });
 
-socket.on('lobbyError', (data) => {
+socket.on('gameError', (data) => {
   showError(data.message);
 });
 
 socket.on('gameAlreadyStarted', () => {
   showError('This game has already started. You cannot join.');
-  resetLobby();
+  resetMenu();
 });
 
 // Team selection socket events
 socket.on('teamChanged', (data) => {
-  playersInLobby = data.players;
+  playersInGame = data.players;
   updatePlayersList();
   if (data.playerId === socket.id) {
     showStatus(`You joined ${data.team === 'team_a' ? 'Team A' : 'Team B'}!`);
@@ -548,27 +548,27 @@ socket.on('gameSettingsUpdated', (data) => {
 
 // Helper functions
 function showWaitingRoom() {
-  lobbyMenu.classList.add('hidden');
+  menuView.classList.add('hidden');
   waitingRoom.classList.remove('hidden');
 }
 
-function resetLobby() {
+function resetMenu() {
   currentGameCode = null;
   isHost = false;
-  playersInLobby = {};
+  playersInGame = {};
   
-  lobbyMenu.classList.remove('hidden');
+  menuView.classList.remove('hidden');
   waitingRoom.classList.add('hidden');
   gameCodeInput.value = '';
 }
 
 function updatePlayersList() {
-  const playerCount = Object.keys(playersInLobby).length;
+  const playerCount = Object.keys(playersInGame).length;
   playerCountDisplay.textContent = playerCount;
   
   playersListElement.innerHTML = '';
   
-  Object.entries(playersInLobby).forEach(([id, player], index) => {
+  Object.entries(playersInGame).forEach(([id, player], index) => {
     const li = document.createElement('li');
     const hostBadge = player.isHost ? ' 👑 (Host)' : '';
     const youBadge = id === socket.id ? ' (You)' : '';
@@ -588,7 +588,7 @@ function updatePlayersList() {
   });
   
   // Update team display if in team mode
-  updateTeamDisplay(playersInLobby);
+  updateTeamDisplay(playersInGame);
   
   // Enable start button logic
   if (isHost && startGameBtn) {
@@ -618,39 +618,39 @@ function showStatus(message) {
   }, 3000);
 }
 
-// Handle lobby status updates
-socket.on('lobbyStatus', (data) => {
+// Handle game browser status updates
+socket.on('gameBrowserStatus', (data) => {
   document.getElementById('gamesPlaying').textContent = data.playing;
   document.getElementById('roomsWaiting').textContent = data.waiting;
   
   const activeGamesList = document.getElementById('activeGamesList');
   activeGamesList.innerHTML = '';
   
-  if (data.lobbies && data.lobbies.length > 0) {
-    data.lobbies.forEach(lobby => {
+  if (data.games && data.games.length > 0) {
+    data.games.forEach(game => {
       const gameItem = document.createElement('div');
-      gameItem.className = `game-item ${lobby.state}`;
+      gameItem.className = `game-item ${game.state}`;
       
-      // Only make waiting rooms clickable
-      if (lobby.state === 'waiting') {
+      // Only make lobbies (waiting state) clickable
+      if (game.state === 'waiting') {
         gameItem.classList.add('clickable');
         gameItem.style.cursor = 'pointer';
       }
       
       gameItem.innerHTML = `
         <div class="game-item-info">
-          <div class="game-item-code">${lobby.code}</div>
-          <div class="game-item-status">${lobby.playerCount} player${lobby.playerCount !== 1 ? 's' : ''}</div>
+          <div class="game-item-code">${game.code}</div>
+          <div class="game-item-status">${game.playerCount} player${game.playerCount !== 1 ? 's' : ''}</div>
         </div>
-        <div class="game-item-badge ${lobby.state}">
-          ${lobby.state === 'playing' ? '🎮 Playing' : '⏳ Waiting'}
+        <div class="game-item-badge ${game.state}">
+          ${game.state === 'playing' ? '🎮 Playing' : '⏳ Lobby'}
         </div>
       `;
       
-      // Add click handler for waiting rooms
-      if (lobby.state === 'waiting') {
+      // Add click handler for lobbies (waiting state)
+      if (game.state === 'waiting') {
         gameItem.addEventListener('click', () => {
-          const gameCode = lobby.code;
+          const gameCode = game.code;
           socket.emit('joinGame', { gameCode, playerId, username });
           showStatus(`Joining game ${gameCode}...`);
         });

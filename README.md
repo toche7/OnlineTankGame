@@ -83,7 +83,7 @@ A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML
    ```
 
 4. **Access the game**
-   - Local: Open `http://localhost:3000/lobby.html` in your browser
+   - Local: Open `http://localhost:3000/menu.html` in your browser
    Configure game settings:
    - Choose game mode (Multiplayer, Team PvP, AI modes)
    - Set tank speed
@@ -129,8 +129,8 @@ A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML
 ### Testing on Multiple Devices
 
 1. **Start the server** - Note the network IP displayed
-2. **Same Computer**: Use `http://localhost:3000/lobby.html`
-3. **Other Devices**: Use `http://[YOUR-NETWORK-IP]:3000/lobby.html`
+2. **Same Computer**: Use `http://localhost:3000/menu.html`
+3. **Other Devices**: Use `http://[YOUR-NETWORK-IP]:3000/menu.html`
    - Replace `[YOUR-NETWORK-IP]` with the IP shown in the server output
    - Ensure all devices are on the **same WiFi network**
 
