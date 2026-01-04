@@ -210,15 +210,37 @@
       "id": "player_1767447822998_1di9snr4r",
       "username": "Somchai",
       "stats": {
-        "gamesPlayed": 2,
+        "gamesPlayed": 4,
         "wins": 2,
         "kills": 0,
-        "deaths": 5,
+        "deaths": 13,
         "totalScore": 0,
         "highestKills": 0,
-        "lastPlayed": 1767499525765
+        "lastPlayed": 1767509244322
       },
       "gameHistory": [
+        {
+          "gameId": "YTTF96",
+          "timestamp": 1767509244324,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 4,
+          "score": 0,
+          "health": 0,
+          "gameMode": "multiplayer",
+          "reason": "Last player standing!"
+        },
+        {
+          "gameId": "45HB4C",
+          "timestamp": 1767509134714,
+          "result": "loss",
+          "kills": 0,
+          "deaths": 4,
+          "score": 0,
+          "health": 0,
+          "gameMode": "multiplayer",
+          "reason": "Last player standing!"
+        },
         {
           "gameId": "M7AHQU",
           "timestamp": 1767499525766,
@@ -247,15 +269,37 @@
       "id": "player_1767447412776_i4e927uzv",
       "username": "Player_AKE",
       "stats": {
-        "gamesPlayed": 6,
-        "wins": 2,
-        "kills": 13,
+        "gamesPlayed": 8,
+        "wins": 4,
+        "kills": 19,
         "deaths": 24,
-        "totalScore": 1300,
+        "totalScore": 1900,
         "highestKills": 5,
-        "lastPlayed": 1767500151964
+        "lastPlayed": 1767509244326
       },
       "gameHistory": [
+        {
+          "gameId": "YTTF96",
+          "timestamp": 1767509244327,
+          "result": "win",
+          "kills": 3,
+          "deaths": 0,
+          "score": 300,
+          "health": 100,
+          "gameMode": "multiplayer",
+          "reason": "Last player standing!"
+        },
+        {
+          "gameId": "45HB4C",
+          "timestamp": 1767509134711,
+          "result": "win",
+          "kills": 3,
+          "deaths": 0,
+          "score": 300,
+          "health": 100,
+          "gameMode": "multiplayer",
+          "reason": "Last player standing!"
+        },
         {
           "gameId": "M7AHQU",
           "timestamp": 1767500151964,

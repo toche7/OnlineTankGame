@@ -1,4 +1,4 @@
-# 🎮 Online Tank Game
+# 💥 Cannon Clash
 
 A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML5 Canvas. Battle against friends or AI with various power-ups, weapons, and multiple game modes!
 
