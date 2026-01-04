@@ -2046,8 +2046,13 @@ setInterval(() => {
   }); // End of lobbies forEach
 }, 1000 / UPDATE_RATE);
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Local network access: http://192.168.1.114:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  if (process.env.RAILWAY_ENVIRONMENT) {
+    console.log(`Railway deployment detected`);
+  } else {
+    console.log(`Local access: http://localhost:${PORT}`);
+  }
 });

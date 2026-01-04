@@ -1,18 +1,31 @@
 # 🎮 Online Tank Game
 
-A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML5 Canvas. Battle against friends on the same local network with various power-ups and weapons!
+A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML5 Canvas. Battle against friends or AI with various power-ups, weapons, and multiple game modes!
 
 ![License](https://img.shields.io/badge/license-ISC-blue.svg)
 ![Node.js](https://img.shields.io/badge/node.js-v14%2B-green.svg)
 
 ## 🎯 Features
 
+### Game Modes
+- **Multiplayer Only**: Classic free-for-all PvP with 2-10 players
+- **Team vs Team (PvP)**: 2 teams battle for supremacy
+  - Team A (⚡) vs Team B (🛡️)
+  - Dynamic team selection in lobby
+  - Team-based win conditions
+- **Solo vs AI Bots**: Practice against AI opponents (1-9 bots)
+- **Co-op vs AI Bots**: Team up with friends against AI enemies
+- **Multiplayer + AI Fill**: Mix of human players and AI bots
+
 ### Gameplay
 - **Real-time Multiplayer**: Up to 10 players can battle simultaneously
 - **Multiple Game Sessions**: Support for up to 5 concurrent games
-- **Game Lobby System**: Create or join games with unique game codes
+- **Game Lobby System**: Create or join games with unique 6-character codes
 - **Time-Limited Matches**: 5-minute battle rounds
 - **Damage & Health System**: Strategic combat with 100 HP per tank
+- **AI Opponents**: Three difficulty levels (Easy, Medium, Hard)
+- **Persistent Player Stats**: Tracks wins, kills, deaths, and scores
+- **Game History**: View your last game statistics
 
 ### Power-ups & Weapons
 - **Speed Boost**: Move 2x faster for 8 seconds
@@ -31,10 +44,19 @@ A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML
 - **Dynamic Obstacles**: Random obstacles spawn during gameplay
 - **Collision Detection**: Physics-based collision system
 - **Smooth Controls**: Responsive keyboard and mouse controls
-- **Background Music**: In-game audio with multiple melodies
+- **Background Music**: In-game audio with 6 melody options (Battle, Classic, Intense, Chill, Epic, Retro)
 - **Visual Effects**: Explosions and particle effects
 - **Scoreboard**: Real-time player rankings
-- **Game Timer**: Countdown display
+- **Game Timer**: Countdown display with 3-second start countdown
+- **Customizable Settings**:
+  - Tank speed (Slow, Normal, Fast, Very Fast)
+  - Debug mode (one-hit kills)
+  - Enable/disable weapons and power-ups
+  - Limited ammo mode (20 bullets with regeneration)
+  - AI difficulty and count
+- **Team Chat**: In-game team communication for Team PvP mode
+- **Username Customization**: Set and change your display name
+- **Return to Lobby**: Seamless restart system after game ends
 
 ## 🚀 Quick Start
 
@@ -62,20 +84,28 @@ A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML
 
 4. **Access the game**
    - Local: Open `http://localhost:3000/lobby.html` in your browser
-   - Network: Use the displayed network IP (e.g., `http://192.168.1.114:3000/lobby.html`)
-
-## 🎮 How to Play
-
-### Starting a Game
-
-**As Host:**
-1. Open the lobby page
-2. Click "Create New Game"
-3. Wait for other players to join
-4. Click "Start Game" when ready
+   Configure game settings:
+   - Choose game mode (Multiplayer, Team PvP, AI modes)
+   - Set tank speed
+   - Select background music
+   - Enable/disable weapons, power-ups, limited ammo
+   - For AI modes: set difficulty and bot count
+4. **For Team PvP**: Players select Team A or Team B
+5. Wait for other players to join
+6. Click "Start Game" when ready (requires at least 2 players for multiplayer modes)
 
 **As Guest:**
 1. Open the lobby page
+2. See available games in "Server Status"
+3. Click on a waiting game to join
+4. **For Team PvP**: Choose your team (Team A or Team B)
+5. Open the lobby page
+2. Click "Create New Game"
+3. Wait for other players to join
+4.**Free-for-all**: Destroy enemy tanks to earn points, survive until the timer runs out, highest score wins
+- **Team PvP**: Eliminate all enemy team members or have the highest team score when time expires
+- **Co-op vs AI**: Work together to eliminate all AI bots
+- Collect power-ups and weapons for tactical advantages
 2. See available games in "Server Status"
 3. Click on a waiting game to join
 4. Wait for the host to start
@@ -127,12 +157,18 @@ Make sure port **3000** is allowed through your firewall:
 ## 📁 Project Structure
 
 ```
-OnlineTankGame/
-├── client/
-│   ├── game.html          # Main game interface
-│   ├── game.js            # Game client logic
-│   ├── lobby.html         # Game lobby interface
-│   ├── lobby.js           # Lobby client logic
+Onli├── stats.html         # Player statistics page
+│   ├── stats.js           # Stats client logic
+│   ├── stats.css          # Stats styling
+│   └── index.html         # Landing page
+├── server/
+│   ├── server.js          # Express & Socket.IO server
+│   └── database.js        # Player stats database
+├── data/
+│   └── players.json       # Persistent player statistics
+├── package.json           # Project dependencies
+├── LOCAL_NETWORK_SETUP.md # Detailed network setup guide
+└── README.md .js           # Lobby client logic
 │   ├── lobby.css          # Lobby styling
 │   ├── styles.css         # Game styling
 │   └── index.html         # Landing page
@@ -146,9 +182,14 @@ OnlineTankGame/
 ## 🛠️ Technologies Used
 
 - **Backend**:
-  - Node.js
-  - Express.js
-  - Socket.IO (Real-time communication)
+  - Node.jsConfigurable (1.5x to 7x base speed)
+- **Base Speed**: 5 units/frame (10 with Speed Boost)
+- **Max Health**: 100 HP
+- **Rotation Speed**: 5 degrees/frame
+- **Team Colors (visual in-game)**:
+  - Own tank: Green
+  - Allies (Team PvP): Blue
+  - Enemies: Redn)
 
 - **Frontend**:
   - HTML5 Canvas
@@ -230,18 +271,41 @@ This project demonstrates:
 - Lobby system and matchmaking
 - Collision detection algorithms
 - Client-server architecture
+- AI pathfinding and behavior
+- Team-based game mechanics
+- Persistent data storage
 
 ## 🔮 Future Enhancements
 
 Potential features for future versions:
-- [ ] Different tank types/classes
-- [ ] Team-based gameplay
-- [ ] Custom maps and arenas
-- [ ] Persistent player statistics
-- [ ] Sound effects for actions
+- [ ] Different tank types/classes with unique abilities
+- [ ] Custom maps and arena editor
+- [ ] Sound effects for shooting, explosions, and power-ups
 - [ ] Mobile-friendly touch controls
-- [ ] Replay system
-- [ ] Tournament mode
+- [ ] Replay system to watch past games
+- [ ] Tournament mode with brackets
+- [ ] Ranked matchmaking with ELO system
+- [ ] Achievements and badges system
+- [ ] Tank skins and customization
+- [ ] Spectator mode for finished players
+- [ ] Voice chat integration
+- [ ] Power-up combinations and special effects
+- [ ] Weather effects and environmental hazards
+- [ ] Capture the flag game mode
+- [ ] King of the hill game mode
+- [ ] Battle royale shrinking zone mode
+
+## ✅ Recent Updates
+
+- ✅ Team-based PvP gameplay (Team A vs Team B)
+- ✅ AI opponent support with difficulty levels
+- ✅ Persistent player statistics
+- ✅ Game history tracking
+- ✅ Multiple game modes
+- ✅ Customizable game settings
+- ✅ Team chat system
+- ✅ Username customization
+- ✅ Enhanced lobby system
 
 ## 📧 Contact
 
