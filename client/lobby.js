@@ -29,6 +29,53 @@ function updateUsernameDisplay() {
   }
 }
 
+// Load and apply saved game settings
+function loadLastGameSettings() {
+  const savedSettings = localStorage.getItem('tankGameLastSettings');
+  if (savedSettings) {
+    try {
+      const settings = JSON.parse(savedSettings);
+      
+      // Apply settings to form elements
+      if (settings.tankSpeed !== undefined) {
+        document.getElementById('tankSpeed').value = settings.tankSpeed;
+      }
+      if (settings.melodyChoice) {
+        document.getElementById('melodyChoice').value = settings.melodyChoice;
+      }
+      if (settings.debugMode !== undefined) {
+        document.getElementById('debugMode').checked = settings.debugMode;
+      }
+      if (settings.weaponsEnabled !== undefined) {
+        document.getElementById('weaponsEnabled').checked = settings.weaponsEnabled;
+      }
+      if (settings.powerupsEnabled !== undefined) {
+        document.getElementById('powerupsEnabled').checked = settings.powerupsEnabled;
+      }
+      if (settings.limitedAmmo !== undefined) {
+        document.getElementById('limitedAmmo').checked = settings.limitedAmmo;
+      }
+      if (settings.gameMode) {
+        document.getElementById('gameMode').value = settings.gameMode;
+        // Update AI settings visibility
+        if (settings.gameMode !== 'multiplayer') {
+          aiSettings.style.display = 'block';
+        }
+      }
+      if (settings.aiDifficulty) {
+        document.getElementById('aiDifficulty').value = settings.aiDifficulty;
+      }
+      if (settings.aiCount !== undefined) {
+        document.getElementById('aiCount').value = settings.aiCount;
+      }
+      
+      console.log('Loaded last game settings:', settings);
+    } catch (e) {
+      console.error('Failed to load last game settings:', e);
+    }
+  }
+}
+
 // Check if returning from a finished game and auto-rejoin
 window.addEventListener('DOMContentLoaded', () => {
   updateUsernameDisplay();
@@ -150,6 +197,20 @@ startGameBtn.addEventListener('click', () => {
     const aiDifficulty = document.getElementById('aiDifficulty').value;
     const aiCount = parseInt(document.getElementById('aiCount').value);
     
+    // Save settings to localStorage for next game
+    const gameSettings = {
+      tankSpeed,
+      melodyChoice,
+      debugMode,
+      weaponsEnabled,
+      powerupsEnabled,
+      limitedAmmo,
+      gameMode,
+      aiDifficulty,
+      aiCount
+    };
+    localStorage.setItem('tankGameLastSettings', JSON.stringify(gameSettings));
+    
     socket.emit('startGame', { 
       gameCode: currentGameCode, 
       tankSpeed: tankSpeed,
@@ -186,6 +247,9 @@ socket.on('gameCreated', (data) => {
   hostControls.classList.remove('hidden');
   playerWaiting.classList.add('hidden');
   
+  // Load last game settings
+  loadLastGameSettings();
+  
   showStatus(`Game created! Share code: ${currentGameCode}`);
 });
 
@@ -204,6 +268,8 @@ socket.on('gameJoined', (data) => {
   if (isHost) {
     hostControls.classList.remove('hidden');
     playerWaiting.classList.add('hidden');
+    // Load last game settings
+    loadLastGameSettings();
     showStatus('Welcome back! You are the host.');
   } else {
     hostControls.classList.add('hidden');
@@ -229,6 +295,8 @@ socket.on('playerJoinedLobby', (data) => {
     // We gained host status
     hostControls.classList.remove('hidden');
     playerWaiting.classList.add('hidden');
+    // Load last game settings
+    loadLastGameSettings();
     showStatus('You are now the host!');
   }
   
@@ -244,6 +312,8 @@ socket.on('playerLeftLobby', (data) => {
     isHost = true;
     hostControls.classList.remove('hidden');
     playerWaiting.classList.add('hidden');
+    // Load last game settings
+    loadLastGameSettings();
     showStatus('You are now the host!');
   }
 });

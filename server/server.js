@@ -602,7 +602,7 @@ async function checkWinConditions(gameCode) {
       lobby.gameWinner = humanTeamWon ? 'HUMAN_TEAM' : 'AI_TEAM';
       
       // Save stats for all human players (co-op: all humans share win/loss)
-      await saveGameStats(gameCode, humanTeamWon ? 'HUMAN_TEAM' : null);
+      await saveGameStats(gameCode, lobby.gameWinner);
       
       lobby.players = {};
       if (lobby.gameSocketIds) {
@@ -1056,6 +1056,29 @@ io.on('connection', (socket) => {
       tankSpeed: tankSpeed,
       melody: melody
     });
+    
+    // Start countdown after a short delay to let players load
+    setTimeout(() => {
+      if (lobbies[gameCode] && lobbies[gameCode].state === 'playing') {
+        lobbies[gameCode].countdownActive = true; // Set countdown flag
+        let countdownValue = 3;
+        const countdownInterval = setInterval(() => {
+          if (!lobbies[gameCode] || lobbies[gameCode].state !== 'playing') {
+            clearInterval(countdownInterval);
+            return;
+          }
+          
+          io.to(gameCode).emit('countdown', { count: countdownValue });
+          
+          if (countdownValue === 0) {
+            clearInterval(countdownInterval);
+            lobbies[gameCode].countdownActive = false; // Countdown finished
+          }
+          
+          countdownValue--;
+        }, 1000);
+      }
+    }, 1000);
     
     // Broadcast lobby status update
     broadcastLobbyStatus();
@@ -1597,13 +1620,15 @@ setInterval(() => {
       }
     });
     
-    // Update AI players
-    Object.keys(lobby.gamePlayers).forEach(playerId => {
-      const tank = lobby.gamePlayers[playerId];
-      if (tank.isAI && tank.aiController) {
-        tank.aiController.update(tank, lobby, gameCode, io);
-      }
-    });
+    // Update AI players (skip during countdown)
+    if (!lobby.countdownActive) {
+      Object.keys(lobby.gamePlayers).forEach(playerId => {
+        const tank = lobby.gamePlayers[playerId];
+        if (tank.isAI && tank.aiController) {
+          tank.aiController.update(tank, lobby, gameCode, io);
+        }
+      });
+    }
     
     // Check win conditions for this lobby
     checkWinConditions(gameCode);

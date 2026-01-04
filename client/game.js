@@ -24,7 +24,9 @@ let gameState = {
   powerups: [],
   gameStartTime: null,
   gameDuration: null,
-  gameFinished: false
+  gameFinished: false,
+  countdownActive: false,
+  countdownValue: 0
 };
 
 const keys = {};
@@ -238,6 +240,16 @@ socket.on('init', (data) => {
   startBackgroundMusic();
 });
 
+// Countdown event
+socket.on('countdown', (data) => {
+  gameState.countdownActive = true;
+  gameState.countdownValue = data.count;
+  
+  if (data.count === 0) {
+    gameState.countdownActive = false;
+  }
+});
+
 socket.on('playerJoined', (data) => {
   gameState.players[data.playerId] = data.tank;
   updatePlayerCount();
@@ -407,6 +419,7 @@ canvas.addEventListener('mousemove', (e) => {
 
 // Canvas click to shoot
 canvas.addEventListener('click', () => {
+  if (gameState.countdownActive || gameState.gameFinished) return;
   playShootSound();
   socket.emit('shoot', {});
 });
@@ -506,8 +519,8 @@ function gameLoop() {
     let velocityX = 0;
     let velocityY = 0;
 
-    // Only allow movement if player is alive (not spectating)
-    if (myTank.isAlive) {
+    // Only allow movement if player is alive (not spectating) and countdown is finished
+    if (myTank.isAlive && !gameState.countdownActive) {
       if (keys['ArrowUp'] || keys['w'] || keys['W']) velocityY -= 5;
       if (keys['ArrowDown'] || keys['s'] || keys['S']) velocityY += 5;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) velocityX -= 5;
@@ -596,6 +609,38 @@ function gameLoop() {
   gameState.explosions.forEach(explosion => {
     explosion.draw(ctx);
   });
+  
+  // Draw countdown overlay
+  if (gameState.countdownActive && gameState.countdownValue > 0) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.font = 'bold 120px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Pulsing effect
+    const pulse = Math.sin(Date.now() / 100) * 0.1 + 0.9;
+    const size = 120 * pulse;
+    ctx.font = `bold ${size}px Arial`;
+    
+    // Outline
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 8;
+    ctx.strokeText(gameState.countdownValue, canvas.width / 2, canvas.height / 2);
+    
+    // Fill
+    ctx.fillStyle = gameState.countdownValue <= 1 ? '#00ff00' : '#ffff00';
+    ctx.fillText(gameState.countdownValue, canvas.width / 2, canvas.height / 2);
+    
+    // "GET READY" text
+    ctx.font = 'bold 40px Arial';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 4;
+    ctx.strokeText('GET READY!', canvas.width / 2, canvas.height / 2 - 100);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('GET READY!', canvas.width / 2, canvas.height / 2 - 100);
+  }
 
   requestAnimationFrame(gameLoop);
 }
@@ -994,10 +1039,21 @@ function showFinishScreen(data) {
   const finishStats = document.getElementById('finishStats');
 
   // Determine if player won or lost
-  const isPlayerWinner = data.winner === gameState.playerId;
+  const myTank = gameState.players[gameState.playerId];
+  let isPlayerWinner = data.winner === gameState.playerId;
+  
+  // Check for team-based wins (co-op mode)
+  if (myTank && myTank.team && (data.winner === 'HUMAN_TEAM' || data.winner === 'AI_TEAM')) {
+    isPlayerWinner = (myTank.team === 'human' && data.winner === 'HUMAN_TEAM') || 
+                     (myTank.team === 'ai' && data.winner === 'AI_TEAM');
+  }
   
   // Set title based on result
-  finishTitle.textContent = isPlayerWinner ? '🎉 YOU WIN! 🎉' : 'GAME OVER';
+  if (isPlayerWinner) {
+    finishTitle.textContent = myTank && myTank.team ? '🎉 YOUR TEAM WINS! 🎉' : '🎉 YOU WIN! 🎉';
+  } else {
+    finishTitle.textContent = 'GAME OVER';
+  }
   finishTitle.style.color = isPlayerWinner ? '#ffff00' : '#ff6600';
   
   // Set reason
@@ -1005,7 +1061,7 @@ function showFinishScreen(data) {
   
   // Set status
   if (isPlayerWinner) {
-    finishStatus.textContent = '✨ Congratulations, Champion! ✨';
+    finishStatus.textContent = myTank && myTank.team ? '✨ Victory! Your team dominated! ✨' : '✨ Congratulations, Champion! ✨';
     finishStatus.style.color = '#ffff00';
   } else {
     finishStatus.textContent = 'Better luck next time!';
@@ -1013,7 +1069,6 @@ function showFinishScreen(data) {
   }
 
   // Display stats
-  const myTank = gameState.players[gameState.playerId];
   if (myTank) {
     finishStats.innerHTML = `
       <p>Your Score: <span>${myTank.score}</span></p>
