@@ -3,6 +3,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const db = require('./database');
+const { version: VERSION } = require('../package.json');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,6 +19,11 @@ app.use(express.static(path.join(__dirname, '../client')));
 
 // Add body parser middleware
 app.use(express.json());
+
+// API route to get game version
+app.get('/api/version', (req, res) => {
+  res.json({ version: VERSION });
+});
 
 // API route to get last game for a player
 app.get('/api/player/:playerId/lastGame', async (req, res) => {
@@ -833,7 +839,7 @@ async function saveGameStats(gameCode, winnerId, gameEndReason = 'Game ended') {
   if (!lobby || !lobby.gamePlayers) return;
   
   // Get game mode from lobby settings
-  const gameMode = lobby.gameMode || 'multiplayer';
+  const gameMode = lobby.gameMode || 'ai_solo';
   
   // Save stats for all players (excluding AI)
   const players = Object.values(lobby.gamePlayers).filter(p => !p.isAI);
@@ -953,7 +959,7 @@ io.on('connection', (socket) => {
       state: 'waiting',
       gameStartTime: null,
       gameWinner: null,
-      gameMode: 'multiplayer', // Default game mode
+      gameMode: 'ai_solo', // Default game mode
       // Per-lobby game state
       gamePlayers: {}, // In-game player tanks
       gameProjectiles: [],
@@ -1019,7 +1025,7 @@ io.on('connection', (socket) => {
     socket.emit('gameJoined', {
       gameCode: gameCode,
       players: lobbies[gameCode].players,
-      gameMode: lobbies[gameCode].gameMode || 'multiplayer'
+      gameMode: lobbies[gameCode].gameMode || 'ai_solo'
     });
     
     // Notify other players in game
@@ -1116,7 +1122,7 @@ io.on('connection', (socket) => {
     socket.emit('gameJoined', {
       gameCode: gameCode,
       players: lobbies[gameCode].players,
-      gameMode: lobbies[gameCode].gameMode || 'multiplayer'
+      gameMode: lobbies[gameCode].gameMode || 'ai_solo'
     });
     
     // Notify ALL players in game (including the rejoining player)
@@ -1134,7 +1140,7 @@ io.on('connection', (socket) => {
     const tankSpeed = data.tankSpeed || TANK_SPEED; // Default if not provided
     const melody = data.melody || 'battle'; // Default melody
     const debugMode = data.debugMode || false; // Debug mode for one-hit kills
-    const gameMode = data.gameMode || 'multiplayer';
+    const gameMode = data.gameMode || 'ai_solo';
     const aiDifficulty = data.aiDifficulty || 'medium';
     const aiCount = data.aiCount || 3;
     
@@ -2257,7 +2263,6 @@ setInterval(() => {
 }, 1000 / UPDATE_RATE);
 
 const PORT = process.env.PORT || 3000;
-const VERSION = '1.1.0';
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`\n========================================`);

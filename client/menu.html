@@ -121,10 +121,10 @@
               
               <label for="gameMode">🎮 Game Mode:</label>
               <select id="gameMode">
-                <option value="multiplayer">Multiplayer Only</option>
-                <option value="ai_solo">Solo vs AI Bots</option>
+                <option value="ai_solo" selected>Solo vs AI Bots</option>
                 <option value="ai_coop">Co-op vs AI Bots</option>
                 <option value="ai_mixed">Multiplayer + AI Fill</option>
+                <option value="multiplayer">Multiplayer Only</option>
                 <option value="team_pvp">Team vs Team (PvP)</option>
               </select>
               
@@ -257,7 +257,7 @@
   </div>
   
   <div class="version-footer">
-    Cannon Clash v1.2.1
+    Cannon Clash v<span id="gameVersion">...</span>
   </div>
 
 <script src="/socket.io/socket.io.js"></script>

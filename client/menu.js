@@ -24,7 +24,7 @@ let tankColor = localStorage.getItem('tankColor');
 let currentGameCode = null;
 let isHost = false;
 let playersInGame = {};
-let currentGameMode = 'multiplayer'; // Track current game mode
+let currentGameMode = 'ai_solo'; // Track current game mode
 
 // Last game data
 let lastGameData = null;
@@ -149,6 +149,15 @@ function loadLastGameSettings() {
 window.addEventListener('DOMContentLoaded', () => {
   updateUsernameDisplay();
   
+  // Fetch game version
+  fetch('/api/version')
+    .then(res => res.json())
+    .then(data => {
+      const versionEl = document.getElementById('gameVersion');
+      if (versionEl) versionEl.textContent = data.version;
+    })
+    .catch(err => console.error('Failed to fetch version:', err));
+  
   // Fetch last game
   fetchLastGame();
   
@@ -270,7 +279,7 @@ function updateGameModeDisplay(gameMode) {
   const colorSelectionSection = document.getElementById('colorSelectionSection');
   
   // Store current game mode
-  currentGameMode = gameMode || 'multiplayer';
+  currentGameMode = gameMode || 'ai_solo';
   
   // Show/hide color selection based on game mode
   // Only show for free-for-all modes: multiplayer and ai_solo
@@ -460,7 +469,7 @@ socket.on('gameCreated', (data) => {
   loadLastGameSettings();
   
   // Set initial game mode visibility
-  const initialGameMode = data.gameMode || 'multiplayer';
+  const initialGameMode = data.gameMode || 'ai_solo';
   updateGameModeDisplay(initialGameMode);
   
   showStatus(`Game created! Share code: ${currentGameCode}`);
@@ -478,7 +487,7 @@ socket.on('gameJoined', (data) => {
   updatePlayersList();
   
   // Set game mode visibility for all players
-  const gameMode = data.gameMode || 'multiplayer';
+  const gameMode = data.gameMode || 'ai_solo';
   updateGameModeDisplay(gameMode);
   
   // Show appropriate controls based on host status
