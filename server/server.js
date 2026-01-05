@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -13,6 +14,16 @@ const io = socketIo(server, {
     methods: ["GET", "POST"]
   }
 });
+
+// Initialize database tables on startup
+(async () => {
+  try {
+    await db.initDatabase();
+  } catch (err) {
+    console.error('Failed to initialize database:', err);
+    process.exit(1);
+  }
+})();
 
 // Serve static files from client folder
 app.use(express.static(path.join(__dirname, '../client')));
@@ -2275,4 +2286,23 @@ server.listen(PORT, '0.0.0.0', () => {
   } else {
     console.log(`Local access: http://localhost:${PORT}`);
   }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(async () => {
+    console.log('HTTP server closed');
+    await db.closePool();
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', async () => {
+  console.log('\nSIGINT signal received: closing HTTP server');
+  server.close(async () => {
+    console.log('HTTP server closed');
+    await db.closePool();
+    process.exit(0);
+  });
 });

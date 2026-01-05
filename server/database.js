@@ -1,250 +1,442 @@
-const fs = require('fs').promises;
-const path = require('path');
+const { Pool } = require('pg');
+require('dotenv').config();
 
-const DATA_DIR = path.join(__dirname, '../data');
-const PLAYERS_FILE = path.join(DATA_DIR, 'players.json');
+// Create PostgreSQL connection pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-// Ensure data directory exists
-async function ensureDataDir() {
+// Connection event handlers
+pool.on('connect', () => {
+  console.log('✅ Connected to PostgreSQL database');
+});
+
+pool.on('error', (err) => {
+  console.error('❌ PostgreSQL pool error:', err);
+});
+
+// Initialize database tables
+async function initDatabase() {
+  const client = await pool.connect();
   try {
-    await fs.access(DATA_DIR);
-  } catch {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-  }
-}
+    // Create players table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS players (
+        id VARCHAR(50) PRIMARY KEY,
+        username VARCHAR(100) NOT NULL,
+        tank_color VARCHAR(7),
+        games_played INTEGER DEFAULT 0,
+        wins INTEGER DEFAULT 0,
+        kills INTEGER DEFAULT 0,
+        deaths INTEGER DEFAULT 0,
+        total_score INTEGER DEFAULT 0,
+        highest_kills INTEGER DEFAULT 0,
+        last_played BIGINT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
 
-// Load player stats from file
-async function loadPlayers() {
-  try {
-    await ensureDataDir();
-    const data = await fs.readFile(PLAYERS_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    // If file doesn't exist, return empty players object
-    return { players: {} };
-  }
-}
+    // Create game_history table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS game_history (
+        id SERIAL PRIMARY KEY,
+        player_id VARCHAR(50) REFERENCES players(id) ON DELETE CASCADE,
+        game_id VARCHAR(10) NOT NULL,
+        timestamp BIGINT NOT NULL,
+        result VARCHAR(10) NOT NULL,
+        kills INTEGER DEFAULT 0,
+        deaths INTEGER DEFAULT 0,
+        score INTEGER DEFAULT 0,
+        health INTEGER DEFAULT 0,
+        game_mode VARCHAR(20),
+        reason TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
 
-// Save player stats to file
-async function savePlayers(data) {
-  try {
-    await ensureDataDir();
-    await fs.writeFile(PLAYERS_FILE, JSON.stringify(data, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Error saving player data:', error);
+    // Create indexes for performance
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_players_username ON players(username)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_players_wins ON players(wins DESC)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_players_kills ON players(kills DESC)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_game_history_player ON game_history(player_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_game_history_timestamp ON game_history(timestamp DESC)
+    `);
+
+    console.log('✅ Database tables initialized successfully');
+  } catch (err) {
+    console.error('❌ Database initialization error:', err);
+    throw err;
+  } finally {
+    client.release();
   }
 }
 
 // Get or create player profile
 async function getPlayer(playerId, username) {
-  const data = await loadPlayers();
-  
-  if (!data.players[playerId]) {
-    data.players[playerId] = {
-      id: playerId,
-      username: username || `Player_${playerId.substr(0, 6)}`,
-      tankColor: null, // Custom tank color (null = use default)
+  const client = await pool.connect();
+  try {
+    // Check if player exists
+    let result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    
+    if (result.rows.length === 0) {
+      // Create new player
+      const defaultUsername = username || `Player_${playerId.substr(0, 6)}`;
+      await client.query(`
+        INSERT INTO players (id, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
+        VALUES ($1, $2, NULL, 0, 0, 0, 0, 0, 0, $3)
+      `, [playerId, defaultUsername, Date.now()]);
+      
+      result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    } else if (username && username !== result.rows[0].username) {
+      // Update username if provided and different
+      await client.query('UPDATE players SET username = $1, updated_at = NOW() WHERE id = $2', [username, playerId]);
+      result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    }
+    
+    // Transform to match current format
+    const player = result.rows[0];
+    return {
+      id: player.id,
+      username: player.username,
+      tankColor: player.tank_color,
       stats: {
-        gamesPlayed: 0,
-        wins: 0,
-        kills: 0,
-        deaths: 0,
-        totalScore: 0,
-        highestKills: 0,
-        lastPlayed: Date.now()
+        gamesPlayed: player.games_played,
+        wins: player.wins,
+        kills: player.kills,
+        deaths: player.deaths,
+        totalScore: player.total_score,
+        highestKills: player.highest_kills,
+        lastPlayed: player.last_played
       }
     };
-  } else if (username && username !== data.players[playerId].username) {
-    // Update username if provided and different
-    data.players[playerId].username = username;
+  } catch (err) {
+    console.error('Error in getPlayer:', err);
+    throw err;
+  } finally {
+    client.release();
   }
-  
-  // Save the data to file
-  await savePlayers(data);
-  
-  return data.players[playerId];
 }
 
 // Update player stats after a game
 async function updatePlayerStats(playerId, gameStats) {
-  const data = await loadPlayers();
-  let player = data.players[playerId];
-  
-  // Create player if doesn't exist
-  if (!player) {
-    data.players[playerId] = {
-      id: playerId,
-      username: `Player_${playerId.substr(0, 6)}`,
-      tankColor: null,
+  const client = await pool.connect();
+  try {
+    // First, ensure player exists
+    let result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    
+    if (result.rows.length === 0) {
+      // Create player if doesn't exist
+      await client.query(`
+        INSERT INTO players (id, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
+        VALUES ($1, $2, NULL, 0, 0, 0, 0, 0, 0, $3)
+      `, [playerId, `Player_${playerId.substr(0, 6)}`, Date.now()]);
+      result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    }
+    
+    const player = result.rows[0];
+    
+    // Calculate new values
+    const newGamesPlayed = player.games_played + 1;
+    const newKills = player.kills + (gameStats.kills || 0);
+    const newDeaths = player.deaths + (gameStats.deaths || 0);
+    const newScore = player.total_score + (gameStats.score || 0);
+    const newWins = player.wins + (gameStats.isWinner ? 1 : 0);
+    const newHighestKills = Math.max(player.highest_kills, gameStats.kills || 0);
+    
+    // Update player stats
+    await client.query(`
+      UPDATE players 
+      SET games_played = $1, wins = $2, kills = $3, deaths = $4, 
+          total_score = $5, highest_kills = $6, last_played = $7, updated_at = NOW()
+      WHERE id = $8
+    `, [newGamesPlayed, newWins, newKills, newDeaths, newScore, newHighestKills, Date.now(), playerId]);
+    
+    // Get updated player
+    result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    const updatedPlayer = result.rows[0];
+    
+    return {
+      id: updatedPlayer.id,
+      username: updatedPlayer.username,
+      tankColor: updatedPlayer.tank_color,
       stats: {
-        gamesPlayed: 0,
-        wins: 0,
-        kills: 0,
-        deaths: 0,
-        totalScore: 0,
-        highestKills: 0,
-        lastPlayed: Date.now()
+        gamesPlayed: updatedPlayer.games_played,
+        wins: updatedPlayer.wins,
+        kills: updatedPlayer.kills,
+        deaths: updatedPlayer.deaths,
+        totalScore: updatedPlayer.total_score,
+        highestKills: updatedPlayer.highest_kills,
+        lastPlayed: updatedPlayer.last_played
       }
     };
-    player = data.players[playerId];
+  } catch (err) {
+    console.error('Error in updatePlayerStats:', err);
+    throw err;
+  } finally {
+    client.release();
   }
-  
-  player.stats.gamesPlayed += 1;
-  player.stats.kills += gameStats.kills || 0;
-  player.stats.deaths += gameStats.deaths || 0;
-  player.stats.totalScore += gameStats.score || 0;
-  player.stats.lastPlayed = Date.now();
-  
-  if (gameStats.isWinner) {
-    player.stats.wins += 1;
-  }
-  
-  if (gameStats.kills > player.stats.highestKills) {
-    player.stats.highestKills = gameStats.kills;
-  }
-  
-  await savePlayers(data);
-  return player;
 }
 
 // Get leaderboard (top players)
 async function getLeaderboard(sortBy = 'wins', limit = 50) {
-  const data = await loadPlayers();
-  const players = Object.values(data.players);
-  
-  // Sort players
-  players.sort((a, b) => {
+  const client = await pool.connect();
+  try {
+    let orderBy;
     switch (sortBy) {
       case 'wins':
-        return b.stats.wins - a.stats.wins;
+        orderBy = 'wins DESC';
+        break;
       case 'kills':
-        return b.stats.kills - a.stats.kills;
+        orderBy = 'kills DESC';
+        break;
       case 'score':
-        return b.stats.totalScore - a.stats.totalScore;
+        orderBy = 'total_score DESC';
+        break;
       case 'winRate':
-        const aRate = a.stats.gamesPlayed > 0 ? a.stats.wins / a.stats.gamesPlayed : 0;
-        const bRate = b.stats.gamesPlayed > 0 ? b.stats.wins / b.stats.gamesPlayed : 0;
-        return bRate - aRate;
+        orderBy = 'CASE WHEN games_played > 0 THEN CAST(wins AS FLOAT) / games_played ELSE 0 END DESC';
+        break;
       case 'kd':
-        const aKD = a.stats.deaths > 0 ? a.stats.kills / a.stats.deaths : a.stats.kills;
-        const bKD = b.stats.deaths > 0 ? b.stats.kills / b.stats.deaths : b.stats.kills;
-        return bKD - aKD;
+        orderBy = 'CASE WHEN deaths > 0 THEN CAST(kills AS FLOAT) / deaths ELSE kills END DESC';
+        break;
       default:
-        return b.stats.wins - a.stats.wins;
+        orderBy = 'wins DESC';
     }
-  });
-  
-  return players.slice(0, limit);
+    
+    const result = await client.query(`
+      SELECT * FROM players 
+      WHERE games_played > 0
+      ORDER BY ${orderBy}
+      LIMIT $1
+    `, [limit]);
+    
+    // Transform to match current format
+    return result.rows.map(player => ({
+      id: player.id,
+      username: player.username,
+      tankColor: player.tank_color,
+      stats: {
+        gamesPlayed: player.games_played,
+        wins: player.wins,
+        kills: player.kills,
+        deaths: player.deaths,
+        totalScore: player.total_score,
+        highestKills: player.highest_kills,
+        lastPlayed: player.last_played
+      }
+    }));
+  } catch (err) {
+    console.error('Error in getLeaderboard:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // Get player rank
 async function getPlayerRank(playerId, sortBy = 'wins') {
-  const leaderboard = await getLeaderboard(sortBy, 1000);
-  const rank = leaderboard.findIndex(p => p.id === playerId);
-  return rank >= 0 ? rank + 1 : null;
+  const client = await pool.connect();
+  try {
+    let orderBy;
+    switch (sortBy) {
+      case 'wins':
+        orderBy = 'wins DESC';
+        break;
+      case 'kills':
+        orderBy = 'kills DESC';
+        break;
+      case 'score':
+        orderBy = 'total_score DESC';
+        break;
+      case 'winRate':
+        orderBy = 'CASE WHEN games_played > 0 THEN CAST(wins AS FLOAT) / games_played ELSE 0 END DESC';
+        break;
+      case 'kd':
+        orderBy = 'CASE WHEN deaths > 0 THEN CAST(kills AS FLOAT) / deaths ELSE kills END DESC';
+        break;
+      default:
+        orderBy = 'wins DESC';
+    }
+    
+    const result = await client.query(`
+      WITH ranked_players AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY ${orderBy}) as rank
+        FROM players
+        WHERE games_played > 0
+      )
+      SELECT rank FROM ranked_players WHERE id = $1
+    `, [playerId]);
+    
+    return result.rows.length > 0 ? result.rows[0].rank : null;
+  } catch (err) {
+    console.error('Error in getPlayerRank:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // Save individual game record for a player
 async function saveGameRecord(playerId, gameRecord) {
-  const data = await loadPlayers();
-  let player = data.players[playerId];
-  
-  // Create player if doesn't exist
-  if (!player) {
-    player = {
-      id: playerId,
-      username: `Player_${playerId.substr(0, 6)}`,
+  const client = await pool.connect();
+  try {
+    // First, ensure player exists
+    let result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    
+    if (result.rows.length === 0) {
+      // Create player if doesn't exist
+      await client.query(`
+        INSERT INTO players (id, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
+        VALUES ($1, $2, NULL, 0, 0, 0, 0, 0, 0, $3)
+      `, [playerId, `Player_${playerId.substr(0, 6)}`, Date.now()]);
+    }
+    
+    // Insert game record
+    await client.query(`
+      INSERT INTO game_history (player_id, game_id, timestamp, result, kills, deaths, score, health, game_mode, reason)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `, [
+      playerId,
+      gameRecord.gameId,
+      gameRecord.timestamp || Date.now(),
+      gameRecord.result,
+      gameRecord.kills || 0,
+      gameRecord.deaths || 0,
+      gameRecord.score || 0,
+      gameRecord.health || 0,
+      gameRecord.gameMode || 'multiplayer',
+      gameRecord.reason || 'Game ended'
+    ]);
+    
+    // Get player with updated info
+    result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    const player = result.rows[0];
+    
+    return {
+      id: player.id,
+      username: player.username,
+      tankColor: player.tank_color,
       stats: {
-        gamesPlayed: 0,
-        wins: 0,
-        kills: 0,
-        deaths: 0,
-        totalScore: 0,
-        highestKills: 0,
-        lastPlayed: Date.now()
-      },
-      gameHistory: []
+        gamesPlayed: player.games_played,
+        wins: player.wins,
+        kills: player.kills,
+        deaths: player.deaths,
+        totalScore: player.total_score,
+        highestKills: player.highest_kills,
+        lastPlayed: player.last_played
+      }
     };
-    data.players[playerId] = player;
+  } catch (err) {
+    console.error('Error in saveGameRecord:', err);
+    throw err;
+  } finally {
+    client.release();
   }
-  
-  // Initialize gameHistory if it doesn't exist
-  if (!player.gameHistory) {
-    player.gameHistory = [];
-  }
-  
-  // Add new game record
-  player.gameHistory.unshift({
-    gameId: gameRecord.gameId,
-    timestamp: gameRecord.timestamp || Date.now(),
-    result: gameRecord.result, // 'win' or 'loss'
-    kills: gameRecord.kills || 0,
-    deaths: gameRecord.deaths || 0,
-    score: gameRecord.score || 0,
-    health: gameRecord.health || 0,
-    gameMode: gameRecord.gameMode || 'multiplayer',
-    reason: gameRecord.reason || 'Game ended'
-  });
-  
-  // Keep only last 10 games
-  if (player.gameHistory.length > 10) {
-    player.gameHistory = player.gameHistory.slice(0, 10);
-  }
-  
-  await savePlayers(data);
-  return player;
 }
 
 // Get the last game played by a player
 async function getLastGame(playerId) {
-  const data = await loadPlayers();
-  const player = data.players[playerId];
-  
-  if (!player || !player.gameHistory || player.gameHistory.length === 0) {
-    return null;
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      SELECT * FROM game_history 
+      WHERE player_id = $1 
+      ORDER BY timestamp DESC 
+      LIMIT 1
+    `, [playerId]);
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const game = result.rows[0];
+    return {
+      gameId: game.game_id,
+      timestamp: game.timestamp,
+      result: game.result,
+      kills: game.kills,
+      deaths: game.deaths,
+      score: game.score,
+      health: game.health,
+      gameMode: game.game_mode,
+      reason: game.reason
+    };
+  } catch (err) {
+    console.error('Error in getLastGame:', err);
+    throw err;
+  } finally {
+    client.release();
   }
-  
-  return player.gameHistory[0];
 }
 
 // Update player tank color preference
 async function updatePlayerColor(playerId, color) {
-  const data = await loadPlayers();
-  let player = data.players[playerId];
-  
-  // Create player if doesn't exist
-  if (!player) {
-    player = {
-      id: playerId,
-      username: `Player_${playerId.substr(0, 6)}`,
-      tankColor: color,
+  const client = await pool.connect();
+  try {
+    // Check if player exists
+    let result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    
+    if (result.rows.length === 0) {
+      // Create player if doesn't exist
+      await client.query(`
+        INSERT INTO players (id, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
+        VALUES ($1, $2, $3, 0, 0, 0, 0, 0, 0, $4)
+      `, [playerId, `Player_${playerId.substr(0, 6)}`, color, Date.now()]);
+    } else {
+      // Update color
+      await client.query('UPDATE players SET tank_color = $1, updated_at = NOW() WHERE id = $2', [color, playerId]);
+    }
+    
+    // Get updated player
+    result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    const player = result.rows[0];
+    
+    return {
+      id: player.id,
+      username: player.username,
+      tankColor: player.tank_color,
       stats: {
-        gamesPlayed: 0,
-        wins: 0,
-        kills: 0,
-        deaths: 0,
-        totalScore: 0,
-        highestKills: 0,
-        lastPlayed: Date.now()
+        gamesPlayed: player.games_played,
+        wins: player.wins,
+        kills: player.kills,
+        deaths: player.deaths,
+        totalScore: player.total_score,
+        highestKills: player.highest_kills,
+        lastPlayed: player.last_played
       }
     };
-    data.players[playerId] = player;
-  } else {
-    player.tankColor = color;
+  } catch (err) {
+    console.error('Error in updatePlayerColor:', err);
+    throw err;
+  } finally {
+    client.release();
   }
-  
-  await savePlayers(data);
-  return player;
+}
+
+// Graceful shutdown
+async function closePool() {
+  await pool.end();
+  console.log('PostgreSQL connection pool closed');
 }
 
 module.exports = {
-  loadPlayers,
-  savePlayers,
+  initDatabase,
   getPlayer,
   updatePlayerStats,
   getLeaderboard,
   getPlayerRank,
   saveGameRecord,
   getLastGame,
-  updatePlayerColor
+  updatePlayerColor,
+  closePool
 };

@@ -7,13 +7,21 @@
     "dev": "nodemon server/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["game", "multiplayer", "tank", "websocket", "socketio"],
+  "keywords": [
+    "game",
+    "multiplayer",
+    "tank",
+    "websocket",
+    "socketio"
+  ],
   "author": "",
   "license": "ISC",
   "description": "A real-time multiplayer tank battle game",
   "dependencies": {
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "nodemon": "^3.1.11",
+    "pg": "^8.16.3",
     "socket.io": "^4.8.3"
   }
 }
