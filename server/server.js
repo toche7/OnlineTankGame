@@ -971,6 +971,7 @@ io.on('connection', (socket) => {
       gameStartTime: null,
       gameWinner: null,
       gameMode: 'ai_solo', // Default game mode
+      lastActivity: Date.now(), // Track last activity for timeout
       // Per-lobby game state
       gamePlayers: {}, // In-game player tanks
       gameProjectiles: [],
@@ -1029,6 +1030,9 @@ io.on('connection', (socket) => {
       tankColor: tankColor,
       isHost: false
     };
+    
+    // Update last activity timestamp
+    lobbies[gameCode].lastActivity = Date.now();
     
     socket.join(gameCode);
     socket.gameCode = gameCode;
@@ -1340,6 +1344,9 @@ io.on('connection', (socket) => {
     if (lobby.players[socket.id]) {
       lobby.players[socket.id].team = team;
       
+      // Update last activity timestamp
+      lobby.lastActivity = Date.now();
+      
       io.to(gameCode).emit('teamChanged', {
         playerId: socket.id,
         team: team,
@@ -1362,6 +1369,9 @@ io.on('connection', (socket) => {
     
     if (lobby.players[socket.id]) {
       lobby.players[socket.id].tankColor = color;
+      
+      // Update last activity timestamp
+      lobby.lastActivity = Date.now();
       
       // Broadcast to all players in lobby
       io.to(gameCode).emit('playerColorChanged', {
@@ -1399,6 +1409,9 @@ io.on('connection', (socket) => {
     // Update game mode
     if (gameMode !== undefined) {
       lobby.gameMode = gameMode;
+      
+      // Update last activity timestamp
+      lobby.lastActivity = Date.now();
       
       // Broadcast to all players in the game
       io.to(gameCode).emit('gameSettingsUpdated', {
@@ -1942,6 +1955,28 @@ function spawnPowerup(gameCode) {
 
 // Game loop - update game state for each lobby
 setInterval(() => {
+  const now = Date.now();
+  const INACTIVE_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
+  
+  // Clean up inactive waiting lobbies
+  Object.keys(lobbies).forEach(gameCode => {
+    const lobby = lobbies[gameCode];
+    if (lobby.state === 'waiting' && now - lobby.lastActivity > INACTIVE_TIMEOUT) {
+      console.log(`Cleaning up inactive lobby ${gameCode} (no activity for 10+ minutes)`);
+      
+      // Notify players in the lobby
+      io.to(gameCode).emit('lobbyTimedOut', { 
+        message: 'Lobby timed out due to inactivity' 
+      });
+      
+      // Delete the lobby
+      delete lobbies[gameCode];
+      
+      // Update game browser status
+      broadcastGameBrowserStatus();
+    }
+  });
+  
   // Process each lobby separately
   Object.keys(lobbies).forEach(gameCode => {
     const lobby = lobbies[gameCode];

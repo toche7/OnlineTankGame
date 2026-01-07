@@ -561,6 +561,11 @@ socket.on('gameAlreadyStarted', () => {
   resetMenu();
 });
 
+socket.on('lobbyTimedOut', (data) => {
+  showError(data.message || 'Lobby timed out due to inactivity.');
+  resetMenu();
+});
+
 // Team selection socket events
 socket.on('teamChanged', (data) => {
   playersInGame = data.players;
