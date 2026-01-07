@@ -7,37 +7,69 @@
   <link rel="stylesheet" href="menu.css">
 </head>
 <body>
+  <!-- Left Sponsor Section -->
+  <div class="sponsor-left">
+    <div class="sponsor-title">💎 Sponsors</div>
+    <!-- <a href="https://itm.eg.mahidol.ac.th" class="sponsor-item">
+      <img src="https://scontent.fbkk35-1.fna.fbcdn.net/v/t39.30808-6/571243618_1426976652766047_5307173246523377963_n.jpg?stp=cp6_dst-jpg_tt6&_nc_cat=100&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=_CnKMyh0_tIQ7kNvwHgOk3o&_nc_oc=AdkA4SWN0mzIHiWpfVahNA-M8hRaTvAuDfDvtAh8wu9rJTfIwwOF1TOtM9sqdMZo54Y9gQW38oxNG6dqBlpmukfZ&_nc_zt=23&_nc_ht=scontent.fbkk35-1.fna&_nc_gid=PMMORCcskbRwEOLT49aETQ&oh=00_AfpmaaYdw8l4s20sij4wkuG1O_7oTFq0boVHk1KGpzxi5Q&oe=69637E61" alt="Sponsor 1">
+      <h4>Your Brand Here</h4>
+      <p>Premium Sponsor</p>
+    </a>
+    <a href="https://itm.eg.mahidol.ac.th" class="sponsor-item">
+      <img src="https://scontent.fbkk35-1.fna.fbcdn.net/v/t39.30808-6/571243618_1426976652766047_5307173246523377963_n.jpg?stp=cp6_dst-jpg_tt6&_nc_cat=100&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=_CnKMyh0_tIQ7kNvwHgOk3o&_nc_oc=AdkA4SWN0mzIHiWpfVahNA-M8hRaTvAuDfDvtAh8wu9rJTfIwwOF1TOtM9sqdMZo54Y9gQW38oxNG6dqBlpmukfZ&_nc_zt=23&_nc_ht=scontent.fbkk35-1.fna&_nc_gid=PMMORCcskbRwEOLT49aETQ&oh=00_AfpmaaYdw8l4s20sij4wkuG1O_7oTFq0boVHk1KGpzxi5Q&oe=69637E61" alt="Sponsor 2">
+      <h4>Your Brand Here</h4>
+      <p>Gold Sponsor</p> -->
+    </a>
+        <a href="https://cbtumu.net/" class="sponsor-item">
+      <img src="https://cbtumu.net/wp-content/uploads/2025/08/cropped-Copy-of-Copy-of-LogoCBTU-Primary-300-x-200-px-300-x-200-px-400-x-200-px.png" alt="Partner 1">
+      <h4>CBTU MU</h4>
+      <p>Gaming Partner</p>
+    </a>
+    <a href="https://cbtumu.net/" class="sponsor-item">
+      <img src="https://cbtumu.net/wp-content/uploads/2025/08/cropped-Copy-of-Copy-of-LogoCBTU-Primary-300-x-200-px-300-x-200-px-400-x-200-px.png" alt="Partner 1">
+      <h4>CBTU MU</h4>
+      <p>Tech Partner</p>
+    </a>
+
+  </div>
+  
   <div class="container">
-    <h1>Cannon Clash</h1>
+    <h1 data-i18n="gameTitle">Cannon Clash</h1>
     
     <!-- Player Profile Section -->
     <div class="player-profile">
       <div class="profile-info">
-        <span>Player Name: <strong id="playerNameDisplay">Guest</strong></span>
-        <button id="changeNameBtn" class="btn-small">Change Name</button>
-        <a href="stats.html" class="btn-small">Stats</a>
-        <a href="#" id="lastGameBtn" class="btn-small" style="display:none;">Last Game</a>
+        <div class="profile-left">
+          <span><span data-i18n="playerName">Player Name</span>: <strong id="playerNameDisplay">Guest</strong></span>
+          <button id="changeNameBtn" class="btn-small" data-i18n="changeName">Change Name</button>
+          <a href="stats.html" class="btn-small" data-i18n="stats">Stats</a>
+          <a href="#" id="lastGameBtn" class="btn-small" style="display:none;" data-i18n="lastGame">Last Game</a>
+        </div>
+        <div class="profile-right">
+          <button class="lang-btn" data-lang="th" onclick="langManager.setLanguage('th')">🇹🇭 ไทย</button>
+          <button class="lang-btn" data-lang="en" onclick="langManager.setLanguage('en')">🇬🇧 EN</button>
+        </div>
       </div>
     </div>
     
     <div class="menu-section">
-      <h2>Game Browser</h2>
+      <h2 data-i18n="gameBrowser">Game Browser</h2>
       
       <div id="waitingRoom" class="waiting-room hidden">
-        <h3>Lobby</h3>
+        <h3 data-i18n="lobby">Lobby</h3>
         <div class="game-info">
-          <p>Game Code: <span id="gameCode" class="game-code">-</span></p>
-          <p>Players: <span id="playerCount">0</span>/10</p>
+          <p><span data-i18n="gameCode">Game Code</span>: <span id="gameCode" class="game-code">-</span></p>
+          <p><span data-i18n="players">Players</span>: <span id="playerCount">0</span>/10</p>
         </div>
         
         <div class="players-list">
-          <h4>Players:</h4>
+          <h4 data-i18n="playersList">Players:</h4>
           <ul id="playersList"></ul>
         </div>
         
         <!-- Tank Color Selection (shown only for applicable game modes) -->
         <div id="colorSelectionSection" class="color-selection-section" style="display: none; margin: 15px 0; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 5px;">
-          <h4 style="margin: 0 0 10px 0;">🎨 Choose Your Tank Color</h4>
+          <h4 style="margin: 0 0 10px 0;" data-i18n="chooseTankColor">🎨 Choose Your Tank Color</h4>
           <div class="color-options">
             <button class="color-btn" data-color="null" title="Default (Green for you, Red for enemies)">
               <div class="color-preview default-preview"></div>
@@ -76,89 +108,89 @@
               <div class="color-preview" style="background: #e91e63;"></div>
             </button>
           </div>
-          <p style="font-size: 0.85em; margin: 10px 0 0 0; color: #999;">💡 Custom colors only apply in free-for-all modes</p>
+          <p style="font-size: 0.85em; margin: 10px 0 0 0; color: #999;" data-i18n="customColorsNote">💡 Custom colors only apply in free-for-all modes</p>
         </div>
         
         <div id="hostControls" class="host-controls hidden">
             <div class="game-settings">
-              <label for="tankSpeed">Tank Speed:</label>
+              <label for="tankSpeed" data-i18n="tankSpeed">Tank Speed:</label>
               <select id="tankSpeed">
-                <option value="1.5">Slow</option>
-                <option value="3" selected>Normal</option>
-                <option value="5">Fast</option>
-                <option value="7">Very Fast</option>
+                <option value="1.5" data-i18n="slow">Slow</option>
+                <option value="3" selected data-i18n="normal">Normal</option>
+                <option value="5" data-i18n="fast">Fast</option>
+                <option value="7" data-i18n="veryFast">Very Fast</option>
               </select>
               
-              <label for="melodyChoice">Background Music:</label>
+              <label for="melodyChoice" data-i18n="backgroundMusic">Background Music:</label>
               <select id="melodyChoice">
-                <option value="battle" selected>Battle Theme</option>
-                <option value="classic">Classic</option>
-                <option value="intense">Intense Combat</option>
-                <option value="chill">Chill Vibes</option>
-                <option value="epic">Epic Adventure</option>
-                <option value="retro">Retro Gaming</option>
+                <option value="battle" selected data-i18n="battleTheme">Battle Theme</option>
+                <option value="classic" data-i18n="classic">Classic</option>
+                <option value="intense" data-i18n="intenseCombat">Intense Combat</option>
+                <option value="chill" data-i18n="chillVibes">Chill Vibes</option>
+                <option value="epic" data-i18n="epicAdventure">Epic Adventure</option>
+                <option value="retro" data-i18n="retroGaming">Retro Gaming</option>
               </select>
               
               <label for="debugMode" style="display: flex; align-items: center; margin-top: 10px;">
                 <input type="checkbox" id="debugMode" style="margin-right: 5px;">
-                <span>🐛 Debug Mode (One-hit kill)</span>
+                <span data-i18n="debugMode">🐛 Debug Mode (One-hit kill)</span>
               </label>
               
               <label for="weaponsEnabled" style="display: flex; align-items: center; margin-top: 5px;">
                 <input type="checkbox" id="weaponsEnabled" checked style="margin-right: 5px;">
-                <span>🎯 Enable Special Weapons</span>
+                <span data-i18n="enableWeapons">🎯 Enable Special Weapons</span>
               </label>
               
               <label for="powerupsEnabled" style="display: flex; align-items: center; margin-top: 5px;">
                 <input type="checkbox" id="powerupsEnabled" checked style="margin-right: 5px;">
-                <span>⚡ Enable Power-ups</span>
+                <span data-i18n="enablePowerups">⚡ Enable Power-ups</span>
               </label>
               
               <label for="limitedAmmo" style="display: flex; align-items: center; margin-top: 5px;">
                 <input type="checkbox" id="limitedAmmo" style="margin-right: 5px;">
-                <span>🎯 Limited Ammo (20 bullets, regenerate over time)</span>
+                <span data-i18n="limitedAmmo">🎯 Limited Ammo (20 bullets, regenerate over time)</span>
               </label>
               
-              <label for="gameMode">🎮 Game Mode:</label>
+              <label for="gameMode" data-i18n="gameMode">🎮 Game Mode:</label>
               <select id="gameMode">
-                <option value="ai_solo" selected>Solo vs AI Bots</option>
-                <option value="ai_coop">Co-op vs AI Bots</option>
-                <option value="ai_mixed">Multiplayer + AI Fill</option>
-                <option value="multiplayer">Multiplayer Only</option>
-                <option value="team_pvp">Team vs Team (PvP)</option>
+                <option value="ai_solo" selected data-i18n="soloVsAI">Solo vs AI Bots</option>
+                <option value="ai_coop" data-i18n="coopVsAI">Co-op vs AI Bots</option>
+                <option value="ai_mixed" data-i18n="multiplayerAI">Multiplayer + AI Fill</option>
+                <option value="multiplayer" data-i18n="multiplayerOnly">Multiplayer Only</option>
+                <option value="team_pvp" data-i18n="teamPvP">Team vs Team (PvP)</option>
               </select>
               
               <div id="aiSettings" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 5px;">
-                <label for="aiDifficulty">🤖 AI Difficulty:</label>
+                <label for="aiDifficulty" data-i18n="aiDifficulty">🤖 AI Difficulty:</label>
                 <select id="aiDifficulty">
-                  <option value="easy">Easy</option>
-                  <option value="medium" selected>Medium</option>
-                  <option value="hard">Hard</option>
+                  <option value="easy" data-i18n="easy">Easy</option>
+                  <option value="medium" selected data-i18n="medium">Medium</option>
+                  <option value="hard" data-i18n="hard">Hard</option>
                 </select>
                 
-                <label for="aiCount" style="margin-top: 5px;">🤖 Number of AI Bots:</label>
+                <label for="aiCount" style="margin-top: 5px;" data-i18n="aiCount">🤖 Number of AI Bots:</label>
                 <input type="number" id="aiCount" min="1" max="9" value="3" style="width: 60px; padding: 5px;">
               </div>
             </div>
-            <button id="startGameBtn" class="btn btn-primary">Start Game</button>
-            <p class="hint">Waiting for players to join...</p>
+            <button id="startGameBtn" class="btn btn-primary" data-i18n="startGame">Start Game</button>
+            <p class="hint" data-i18n="waitingForPlayers">Waiting for players to join...</p>
           </div>
           
           <!-- Team Selection (visible to all players when in team_pvp mode) -->
           <div id="teamSettings" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 5px;">
-            <h4 style="margin: 0 0 10px 0;">⚔️ Team Selection</h4>
-            <p style="font-size: 0.9em; margin: 0 0 10px 0;">Choose your team:</p>
+            <h4 style="margin: 0 0 10px 0;" data-i18n="teamSelection">⚔️ Team Selection</h4>
+            <p style="font-size: 0.9em; margin: 0 0 10px 0;" data-i18n="chooseTeam">Choose your team:</p>
             <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-              <button id="joinRedTeam" class="btn-small" style="background: #ff8844;">⚡ Join Team A</button>
-              <button id="joinBlueTeam" class="btn-small" style="background: #44aaff;">🛡️ Join Team B</button>
+              <button id="joinRedTeam" class="btn-small" style="background: #ff8844;" data-i18n="joinTeamA">⚡ Join Team A</button>
+              <button id="joinBlueTeam" class="btn-small" style="background: #44aaff;" data-i18n="joinTeamB">🛡️ Join Team B</button>
             </div>
             <div id="teamDistribution" style="margin-top: 10px;">
               <div style="display: flex; justify-content: space-between; padding: 5px; background: rgba(255,136,68,0.2); border-radius: 3px; margin-bottom: 5px;">
-                <span>⚡ Team A:</span>
+                <span data-i18n="teamA">⚡ Team A:</span>
                 <span id="redTeamCount">0</span>
               </div>
               <div style="display: flex; justify-content: space-between; padding: 5px; background: rgba(68,170,255,0.2); border-radius: 3px;">
-                <span>🛡️ Team B:</span>
+                <span data-i18n="teamB">🛡️ Team B:</span>
                 <span id="blueTeamCount">0</span>
               </div>
             </div>
@@ -166,33 +198,33 @@
           </div>
           
           <div id="playerWaiting" class="player-waiting hidden">
-            <p class="waiting-message">⏳ Waiting for host to start the game...</p>
+            <p class="waiting-message" data-i18n="waitingForHost">⏳ Waiting for host to start the game...</p>
           </div>
           
-          <button id="leaveLobbyBtn" class="btn btn-secondary">Leave Game</button>
+          <button id="leaveLobbyBtn" class="btn btn-secondary" data-i18n="leaveGame">Leave Game</button>
       </div>
       
       <div id="menuView" class="menu-view">
         <!-- Active Games Display -->
         <div class="server-status">
-            <h3>🎮 Server Status</h3>
+            <h3 data-i18n="serverStatus">🎮 Server Status</h3>
             <div class="status-grid">
               <div class="status-item">
-                <span class="status-label">Games Playing:</span>
+                <span class="status-label" data-i18n="gamesPlaying">Games Playing:</span>
                 <span id="gamesPlaying" class="status-value">0</span>
               </div>
               <div class="status-item">
-                <span class="status-label">Lobbies Waiting:</span>
+                <span class="status-label" data-i18n="lobbiesWaiting">Lobbies Waiting:</span>
                 <span id="roomsWaiting" class="status-value">0</span>
               </div>
             </div>
             <div id="activeGamesList" class="active-games-list"></div>
           </div>
           
-          <button id="createGameBtn" class="btn btn-large btn-primary">Create New Game</button>
-          <div class="divider">OR</div>
+          <button id="createGameBtn" class="btn btn-large btn-primary" data-i18n="createNewGame">Create New Game</button>
+          <div class="divider" data-i18n="or">OR</div>
           <div class="join-section">
-            <p class="join-instruction">👆 Click on any waiting lobby above to join</p>
+            <p class="join-instruction" data-i18n="clickToJoin">👆 Click on any waiting lobby above to join</p>
           </div>
       </div>
     </div>
@@ -203,11 +235,11 @@
     <!-- Username Modal -->
     <div id="usernameModal" class="modal hidden">
       <div class="modal-content">
-        <h3>Enter Your Name</h3>
-        <input type="text" id="usernameInput" placeholder="Enter your name" maxlength="20">
+        <h3 data-i18n="enterYourName">Enter Your Name</h3>
+        <input type="text" id="usernameInput" data-i18n="enterName" placeholder="Enter your name" maxlength="20">
         <div class="modal-buttons">
-          <button id="saveUsernameBtn" class="btn btn-primary">Save</button>
-          <button id="cancelUsernameBtn" class="btn btn-secondary">Cancel</button>
+          <button id="saveUsernameBtn" class="btn btn-primary" data-i18n="save">Save</button>
+          <button id="cancelUsernameBtn" class="btn btn-secondary" data-i18n="cancel">Cancel</button>
         </div>
       </div>
     </div>
@@ -215,36 +247,36 @@
     <!-- Last Game Modal -->
     <div id="lastGameModal" class="modal hidden">
       <div class="modal-content">
-        <h3>🎮 Last Game Played</h3>
+        <h3 data-i18n="lastGamePlayed">🎮 Last Game Played</h3>
         <div id="lastGameContent" style="margin: 20px 0;">
           <div style="margin-bottom: 15px;">
-            <strong>Game Mode:</strong> <span id="lgGameMode"></span>
+            <strong data-i18n="gameMode">Game Mode:</strong> <span id="lgGameMode"></span>
           </div>
           <div style="margin-bottom: 15px;">
-            <strong>Result:</strong> <span id="lgResult" style="font-size: 1.2em;"></span>
+            <strong data-i18n="result">Result:</strong> <span id="lgResult" style="font-size: 1.2em;"></span>
           </div>
           <div style="margin-bottom: 15px;">
-            <strong>Reason:</strong> <span id="lgReason"></span>
+            <strong data-i18n="reason">Reason:</strong> <span id="lgReason"></span>
           </div>
           <div style="margin-bottom: 15px;">
-            <strong>Time:</strong> <span id="lgTimestamp"></span>
+            <strong data-i18n="time">Time:</strong> <span id="lgTimestamp"></span>
           </div>
           <hr style="margin: 15px 0; border: 1px solid #555;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <div><strong>Kills:</strong> <span id="lgKills"></span></div>
-            <div><strong>Deaths:</strong> <span id="lgDeaths"></span></div>
-            <div><strong>Score:</strong> <span id="lgScore"></span></div>
-            <div><strong>Final Health:</strong> <span id="lgHealth"></span></div>
+            <div><strong data-i18n="kills">Kills:</strong> <span id="lgKills"></span></div>
+            <div><strong data-i18n="deaths">Deaths:</strong> <span id="lgDeaths"></span></div>
+            <div><strong data-i18n="score">Score:</strong> <span id="lgScore"></span></div>
+            <div><strong data-i18n="finalHealth">Final Health:</strong> <span id="lgHealth"></span></div>
           </div>
         </div>
         <div class="modal-buttons">
-          <button id="closeLastGameBtn" class="btn btn-secondary">Close</button>
+          <button id="closeLastGameBtn" class="btn btn-secondary" data-i18n="close">Close</button>
         </div>
       </div>
     </div>
     
     <div class="info-section">
-      <h3>How to Play</h3>
+      <h3 data-i18n="howToPlay">How to Play</h3>
       <ul>
         <li>🎯 Use WASD or Arrow Keys to move your tank</li>
         <li>🖱️ Move mouse to aim</li>
@@ -254,13 +286,30 @@
         <li>⏱️ Game lasts 5 minutes</li>
       </ul>
     </div>
+    
+    <div class="version-footer">
+      Cannon Clash v<span id="gameVersion">...</span>
+    </div>
   </div>
   
-  <div class="version-footer">
-    Cannon Clash v<span id="gameVersion">...</span>
-  </div>
+  <!-- Right Sponsor Section -->
+  <div class="sponsor-right">
+    <div class="sponsor-title">🎮 Partners</div>
+    <a href="https://cbtumu.net/" class="sponsor-item">
+      <img src="https://cbtumu.net/wp-content/uploads/2025/08/cropped-Copy-of-Copy-of-LogoCBTU-Primary-300-x-200-px-300-x-200-px-400-x-200-px.png" alt="Partner 1">
+      <h4>CBTU MU</h4>
+      <p>Gaming Partner</p>
+    </a>
+    <a href="https://cbtumu.net/" class="sponsor-item">
+      <img src="https://cbtumu.net/wp-content/uploads/2025/08/cropped-Copy-of-Copy-of-LogoCBTU-Primary-300-x-200-px-300-x-200-px-400-x-200-px.png" alt="Partner 1">
+      <h4>CBTU MU</h4>
+      <p>Tech Partner</p>
+    </a>
 
+  </div>
+  
 <script src="/socket.io/socket.io.js"></script>
+<script src="lang.js"></script>
 <script src="menu.js"></script>
 </body>
 </html>

@@ -1,9 +1,11 @@
 # 💥 Cannon Clash
 
-A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML5 Canvas. Battle against friends or AI with various power-ups, weapons, and multiple game modes!
+A real-time multiplayer tank battle game built with Node.js, Socket.IO, PostgreSQL, and HTML5 Canvas. Battle against friends or AI with various power-ups, weapons, and multiple game modes!
 
-![License](https://img.shields.io/badge/license-ISC-blue.svg)
-![Node.js](https://img.shields.io/badge/node.js-v14%2B-green.svg)
+![Version](https://img.shields.io/badge/version-1.2.2-blue.svg)
+![License](https://img.shields.io/badge/license-ISC-green.svg)
+![Node.js](https://img.shields.io/badge/node.js-v14%2B-brightgreen.svg)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13%2B-blue.svg)
 
 ## 🎯 Features
 
@@ -63,6 +65,9 @@ A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML
 ### Prerequisites
 - Node.js (v14 or higher)
 - npm (Node Package Manager)
+- PostgreSQL (v13 or higher) - for production deployment
+  - Local development can use PostgreSQL or fallback to JSON storage
+  - See [DATABASE_SETUP.md](DATABASE_SETUP.md) for detailed setup instructions
 
 ### Installation
 
@@ -77,19 +82,40 @@ A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML
    npm install
    ```
 
-3. **Start the server**
+3. **Configure Database** (Optional for local development)
+   ```bash
+   # Create .env file and add your PostgreSQL connection
+   DATABASE_URL=postgresql://username:password@localhost:5432/cannon_clash
+   NODE_ENV=development
+   ```
+   See [DATABASE_SETUP.md](DATABASE_SETUP.md) for full setup guide.
+
+4. **Start the server**
    ```bash
    npm start
    ```
+   For development with auto-reload:
+   ```bash
+   npm run dev
+   ```
 
-4. **Access the game**
+5. **Access the game**
    - Local: Open `http://localhost:3000/menu.html` in your browser
-   Configure game settings:
+   - Network: Use your local IP (shown in terminal) for other devices
+
+## 🎮 How to Play
+
+### Game Setup
+
+**As Host:**
+1. Open the menu page
+2. Configure game settings:
    - Choose game mode (Multiplayer, Team PvP, AI modes)
    - Set tank speed
    - Select background music
    - Enable/disable weapons, power-ups, limited ammo
    - For AI modes: set difficulty and bot count
+3. Click "Create New Game"
 4. **For Team PvP**: Players select Team A or Team B
 5. Wait for other players to join
 6. Click "Start Game" when ready (requires at least 2 players for multiplayer modes)
@@ -99,16 +125,14 @@ A real-time multiplayer tank battle game built with Node.js, Socket.IO, and HTML
 2. See available games in "Server Status"
 3. Click on a waiting game to join
 4. **For Team PvP**: Choose your team (Team A or Team B)
-5. Open the lobby page
-2. Click "Create New Game"
-3. Wait for other players to join
-4.**Free-for-all**: Destroy enemy tanks to earn points, survive until the timer runs out, highest score wins
+5. Wait for the host to start
+
+### Gameplay
+
+- **Free-for-all**: Destroy enemy tanks to earn points, survive until the timer runs out, highest score wins
 - **Team PvP**: Eliminate all enemy team members or have the highest team score when time expires
 - **Co-op vs AI**: Work together to eliminate all AI bots
 - Collect power-ups and weapons for tactical advantages
-2. See available games in "Server Status"
-3. Click on a waiting game to join
-4. Wait for the host to start
 
 ### Controls
 
@@ -157,39 +181,44 @@ Make sure port **3000** is allowed through your firewall:
 ## 📁 Project Structure
 
 ```
-Onli├── stats.html         # Player statistics page
+OnlineTankGame/
+├── client/
+│   ├── game.html          # Game canvas page
+│   ├── game.js            # Game client logic
+│   ├── lobby.html         # Game lobby page
+│   ├── lobby.js           # Lobby client logic
+│   ├── lobby.css          # Lobby styling
+│   ├── menu.html          # Main menu page
+│   ├── menu.js            # Menu client logic
+│   ├── menu.css           # Menu styling
+│   ├── stats.html         # Player statistics page
 │   ├── stats.js           # Stats client logic
 │   ├── stats.css          # Stats styling
-│   └── index.html         # Landing page
-├── server/
-│   ├── server.js          # Express & Socket.IO server
-│   └── database.js        # Player stats database
-├── data/
-│   └── players.json       # Persistent player statistics
-├── package.json           # Project dependencies
-├── LOCAL_NETWORK_SETUP.md # Detailed network setup guide
-└── README.md .js           # Lobby client logic
-│   ├── lobby.css          # Lobby styling
 │   ├── styles.css         # Game styling
 │   └── index.html         # Landing page
 ├── server/
-│   └── server.js          # Express & Socket.IO server
+│   ├── server.js          # Express & Socket.IO server
+│   └── database.js        # PostgreSQL database module
+├── data/
+│   └── players.json       # JSON fallback for player stats
 ├── package.json           # Project dependencies
-├── LOCAL_NETWORK_SETUP.md # Detailed network setup guide
-└── README.md             # This file
+├── .env                   # Environment variables (create this)
+├── .gitignore             # Git ignore rules
+├── nixpacks.toml          # Nixpacks build configuration
+├── railway.toml           # Railway deployment config
+├── DATABASE_SETUP.md      # PostgreSQL setup guide
+├── RAILWAY_DEPLOYMENT.md  # Railway deployment guide
+├── LOCAL_NETWORK_SETUP.md # Local network setup guide
+└── README.md              # This file
 ```
 
 ## 🛠️ Technologies Used
 
 - **Backend**:
-  - Node.jsConfigurable (1.5x to 7x base speed)
-- **Base Speed**: 5 units/frame (10 with Speed Boost)
-- **Max Health**: 100 HP
-- **Rotation Speed**: 5 degrees/frame
-- **Team Colors (visual in-game)**:
-  - Own tank: Green
-  - Allies (Team PvP): Blue
-  - Enemies: Redn)
+  - Node.js (Express)
+  - Socket.IO
+  - PostgreSQL
+  - dotenv (environment config)
 
 - **Frontend**:
   - HTML5 Canvas
@@ -197,13 +226,22 @@ Onli├── stats.html         # Player statistics page
   - Socket.IO Client
   - CSS3
 
+- **Database**:
+  - PostgreSQL (production)
+  - JSON fallback (development)
+
 ## 🎯 Game Mechanics
 
 ### Tank Properties
 - **Size**: 20x20 pixels
-- **Speed**: 5 units/frame (10 with Speed Boost)
+- **Speed**: Configurable (1.5x to 7x base speed)
+  - Base Speed: 5 units/frame (10 with Speed Boost)
 - **Max Health**: 100 HP
 - **Rotation Speed**: 5 degrees/frame
+- **Team Colors** (visual in-game):
+  - Own tank: Green
+  - Allies (Team PvP): Blue
+  - Enemies: Red
 
 ### Projectile Properties
 - **Speed**: 8 units/frame
@@ -225,11 +263,47 @@ This uses `nodemon` for automatic server restarts on file changes.
 
 ### Configuration
 
-Key constants in `server/server.js`:
+Key constants in [server/server.js](server/server.js):
 - `GAME_DURATION`: Match length (default: 5 minutes)
 - `MAX_PLAYERS`: Maximum players per game (default: 10)
 - `MAX_CONCURRENT_GAMES`: Maximum simultaneous games (default: 5)
 - `UPDATE_RATE`: Server tick rate (default: 60 FPS)
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+```env
+DATABASE_URL=postgresql://username:password@host:port/database
+NODE_ENV=development  # or production
+PORT=3000  # optional, defaults to 3000
+```
+
+## 🚀 Deployment
+
+### Railway Deployment
+
+This project is configured for easy deployment to Railway:
+
+1. **Push to GitHub**
+2. **Connect to Railway**
+   - Import your repository at [railway.app](https://railway.app)
+3. **Add PostgreSQL Database**
+   - Click "+ New" → "Database" → "PostgreSQL"
+4. **Configure Environment**
+   - Railway automatically sets DATABASE_URL
+   - Add NODE_ENV=production
+
+For detailed instructions, see [RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md)
+
+### Other Platforms
+
+The app can be deployed to any Node.js hosting platform:
+- Heroku
+- DigitalOcean
+- AWS
+- Google Cloud
+
+Ensure PostgreSQL is configured and DATABASE_URL is set.
 
 ## 🐛 Troubleshooting
 
@@ -237,6 +311,7 @@ Key constants in `server/server.js`:
 - Verify both devices are on the same WiFi network
 - Check firewall settings for port 3000
 - Ensure the server is running
+- See [LOCAL_NETWORK_SETUP.md](LOCAL_NETWORK_SETUP.md)
 
 ### Connection keeps dropping?
 - Check WiFi stability
@@ -247,6 +322,12 @@ Key constants in `server/server.js`:
 - Make sure at least one player has joined
 - Verify the host clicked "Start Game"
 - Check browser console for errors (F12)
+
+### Database connection issues?
+- Verify DATABASE_URL is correctly set in .env
+- Check PostgreSQL is running
+- Review logs for specific error messages
+- See [DATABASE_SETUP.md](DATABASE_SETUP.md)
 
 ## 📝 License
 
@@ -295,17 +376,26 @@ Potential features for future versions:
 - [ ] King of the hill game mode
 - [ ] Battle royale shrinking zone mode
 
-## ✅ Recent Updates
+## ✅ Recent Updates (v1.2.2)
 
+### Database & Infrastructure
+- ✅ PostgreSQL database integration
+- ✅ Environment variable configuration with dotenv
+- ✅ Railway deployment support
+- ✅ Nixpacks build configuration
+- ✅ Database setup documentation
+
+### Gameplay Features
 - ✅ Team-based PvP gameplay (Team A vs Team B)
 - ✅ AI opponent support with difficulty levels
 - ✅ Persistent player statistics
 - ✅ Game history tracking
-- ✅ Multiple game modes
+- ✅ Multiple game modes (PvP, Team PvP, Solo vs AI, Co-op)
 - ✅ Customizable game settings
 - ✅ Team chat system
 - ✅ Username customization
 - ✅ Enhanced lobby system
+- ✅ Background music with 6 melody options
 
 ## 📧 Contact
 
