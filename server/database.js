@@ -189,7 +189,7 @@ async function updatePlayerStats(playerId, gameStats) {
 }
 
 // Get leaderboard (top players)
-async function getLeaderboard(sortBy = 'wins', limit = 50) {
+async function getLeaderboard(sortBy = 'wins', limit = 100) {
   const client = await pool.connect();
   try {
     let orderBy;

@@ -1800,7 +1800,7 @@ io.on('connection', (socket) => {
   socket.on('getLeaderboard', async (data) => {
     try {
       const sortBy = data.sortBy || 'wins';
-      const leaderboard = await db.getLeaderboard(sortBy, 50);
+      const leaderboard = await db.getLeaderboard(sortBy, 100); // Changed from 50 to 100
       socket.emit('leaderboard', leaderboard);
     } catch (error) {
       console.error('Error getting leaderboard:', error);
