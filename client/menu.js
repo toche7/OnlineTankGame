@@ -1,21 +1,30 @@
 const socket = io();
 
+// Check if user just logged out
+const urlParams = new URLSearchParams(window.location.search);
+const justLoggedOut = urlParams.get('logout') === 'true';
+if (justLoggedOut) {
+  // Clear ALL tank game data to ensure clean logout
+  localStorage.removeItem('tankGamePlayerId');
+  localStorage.removeItem('tankColor');
+  console.log('Logged out - cleared all player data');
+  // Remove the logout parameter from URL
+  window.history.replaceState({}, document.title, window.location.pathname);
+}
+
 // Generate or retrieve persistent player ID
 let playerId = localStorage.getItem('tankGamePlayerId');
 if (!playerId) {
-  playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  // Generate a truly unique player ID with milliseconds + random
+  playerId = 'guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   localStorage.setItem('tankGamePlayerId', playerId);
   console.log('Generated new player ID:', playerId);
 } else {
   console.log('Using existing player ID:', playerId);
 }
 
-// Get or set username
-let username = localStorage.getItem('tankGameUsername');
-if (!username) {
-  username = `Player_${playerId.substr(7, 6)}`;
-  localStorage.setItem('tankGameUsername', username);
-}
+// Username will be fetched from server
+let username = null;
 
 // Get or set tank color
 let tankColor = localStorage.getItem('tankColor');
@@ -49,7 +58,7 @@ async function fetchLastGame() {
   }
 }
 
-// Check authentication status
+// Check authentication status and fetch username
 async function checkAuth() {
   try {
     const response = await fetch('/api/user');
@@ -59,11 +68,15 @@ async function checkAuth() {
     const changeNameBtn = document.getElementById('changeNameBtn');
     const playerNameDisplay = document.getElementById('playerNameDisplay');
     
-    if (data.authenticated) {
-      // User is logged in
-      playerId = data.user.id;
+    if (data.authenticated && !justLoggedOut) {
+      // User is logged in - use their authenticated ID and username
+      // Don't update if they just logged out (prevents overwriting new guest ID)
+      // Only update playerId if it's different (don't overwrite guest ID unnecessarily)
+      if (playerId !== data.user.id) {
+        playerId = data.user.id;
+        localStorage.setItem('tankGamePlayerId', playerId);
+      }
       username = data.user.username;
-      localStorage.setItem('tankGamePlayerId', playerId);
       isAuthenticated = true;
 
       playerNameDisplay.textContent = username;
@@ -74,10 +87,44 @@ async function checkAuth() {
       // Allow using the same change-name modal for authenticated users
       changeNameBtn.style.display = 'inline-block';
     } else {
-      // Not logged in
+      // Not logged in - fetch username from server based on playerId
       isAuthenticated = false;
+      
+      // Fetch player data from server to check if this ID is Google-linked
+      try {
+        const playerResponse = await fetch(`/api/player/${playerId}`);
+        const playerData = await playerResponse.json();
+        
+        // Check if this player ID is linked to a Google account
+        // If so, generate a new guest ID since the user is not authenticated
+        if (playerData.success && playerData.player && playerData.player.googleId) {
+          console.log('Detected Google-linked account while not authenticated. Generating new guest ID...');
+          playerId = 'guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+          localStorage.setItem('tankGamePlayerId', playerId);
+          console.log('Generated new guest player ID:', playerId);
+          
+          // Re-register the socket with the new player ID
+          socket.emit('registerPlayer', { playerId });
+          
+          // Fetch the new player data
+          const newPlayerResponse = await fetch(`/api/player/${playerId}`);
+          const newPlayerData = await newPlayerResponse.json();
+          if (newPlayerData.success && newPlayerData.player) {
+            username = newPlayerData.player.username;
+          } else {
+            username = 'Guest';
+          }
+        } else if (playerData.success && playerData.player) {
+          username = playerData.player.username;
+        } else {
+          username = 'Guest';
+        }
+      } catch (err) {
+        console.error('Error fetching player data:', err);
+        username = 'Guest';
+      }
 
-      playerNameDisplay.textContent = username || 'Guest';
+      playerNameDisplay.textContent = username;
       playerNameDisplay.style.color = 'white'; // Default color for anonymous users
       loginBtn.textContent = (typeof langManager !== 'undefined') ? langManager.t('loginWithGoogle') : 'Login with Google';
       loginBtn.onclick = () => window.location.href = '/auth/google';
@@ -535,14 +582,15 @@ saveUsernameBtn.addEventListener('click', () => {
       })();
     } else {
       // Anonymous users: ask server to update (server will check uniqueness)
+      console.log('Updating username for anonymous user, playerId:', playerId, 'newName:', newName);
       socket.emit('updateUsername', { playerId, username: newName }, (resp) => {
         if (resp && resp.success) {
           username = resp.name || newName;
-          localStorage.setItem('tankGameUsername', username);
           updateUsernameDisplay();
           usernameModal.classList.add('hidden');
           showStatus('Username updated!');
         } else {
+          console.error('Username update failed:', resp);
           showUsernameModalError(resp && resp.error ? resp.error : 'Failed to update username');
         }
       });

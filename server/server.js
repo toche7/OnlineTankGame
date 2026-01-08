@@ -122,6 +122,29 @@ app.get('/api/user', (req, res) => {
   }
 });
 
+// API route to get player data by playerId
+app.get('/api/player/:playerId', async (req, res) => {
+  try {
+    const playerId = req.params.playerId;
+    const playerData = await db.getPlayer(playerId);
+    
+    if (playerData) {
+      // Also fetch raw data to check for google_id
+      const rawData = await db.getPlayerRaw(playerId);
+      const player = {
+        ...playerData,
+        googleId: rawData?.google_id || null
+      };
+      res.json({ success: true, player });
+    } else {
+      res.json({ success: false, message: 'Player not found' });
+    }
+  } catch (error) {
+    console.error('Error fetching player:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // API route to change player name
 app.post('/api/change-name', async (req, res) => {
   if (!req.isAuthenticated()) {
@@ -207,7 +230,7 @@ app.get('/logout', (req, res) => {
         console.error('Session destroy error:', err);
         return res.status(500).send('Session destroy failed');
       }
-      res.redirect('/');
+      res.redirect('/?logout=true');
     });
   });
 });
@@ -1250,7 +1273,7 @@ io.on('connection', (socket) => {
     console.log(`Player ${socket.id} joined game ${gameCode}`);
   });
   
-  socket.on('rejoinLobby', (data) => {
+  socket.on('rejoinLobby', async (data) => {
     const gameCode = data.gameCode.toUpperCase();
     
     if (!lobbies[gameCode]) {
@@ -1268,6 +1291,18 @@ io.on('connection', (socket) => {
     console.log(`Current originalHostPlayerId: ${lobbies[gameCode].originalHostPlayerId}`);
     console.log(`Current host: ${lobbies[gameCode].host}`);
     console.log(`Current players:`, Object.keys(lobbies[gameCode].players));
+    
+    // Fetch username from database instead of trusting client
+    let username = data.username || genGuestName();
+    try {
+      const playerData = await db.getPlayer(data.playerId);
+      if (playerData && playerData.username) {
+        username = playerData.username;
+        console.log(`Fetched username from DB: ${username}`);
+      }
+    } catch (err) {
+      console.error('Error fetching username for rejoin:', err);
+    }
     
     // Check if this player was the host by comparing their persistent player ID
     // Check both originalHostPlayerId (lobby creation) and hostGamePlayerId (last game host)
@@ -1326,13 +1361,13 @@ io.on('connection', (socket) => {
     lobbies[gameCode].players[socket.id] = {
       id: socket.id,
       playerId: data.playerId,
-      username: data.username || (oldPlayerData?.username) || genGuestName(),
+      username: username, // Use username from database
       tankColor: data.tankColor || (oldPlayerData?.tankColor) || null,
       isHost: isHost,
       team: oldPlayerData?.team || null // Preserve team from old data
     };
     
-    console.log(`Player ${socket.id} rejoined with team: ${lobbies[gameCode].players[socket.id].team}, color: ${lobbies[gameCode].players[socket.id].tankColor}`);
+    console.log(`Player ${socket.id} rejoined with username: ${username}, team: ${lobbies[gameCode].players[socket.id].team}, color: ${lobbies[gameCode].players[socket.id].tankColor}`);
     
     socket.join(gameCode);
     socket.gameCode = gameCode;
@@ -2101,14 +2136,22 @@ io.on('connection', (socket) => {
   // Handle username update requests from sockets. Uses callback ack to inform client of result.
   socket.on('updateUsername', async (data, callback) => {
     try {
+      console.log('updateUsername received:', { socketId: socket.id, playerId: data?.playerId, username: data?.username, socketPersistentId: socket.persistentPlayerId });
+      
       if (!data || !data.username || !data.playerId) {
         if (typeof callback === 'function') callback({ success: false, error: 'Invalid request' });
         return;
       }
 
+      // Set socket.persistentPlayerId if not already set (for menu page updates)
+      if (!socket.persistentPlayerId) {
+        socket.persistentPlayerId = data.playerId;
+        console.log('Set socket.persistentPlayerId to', data.playerId);
+      }
+
       // Ensure the socket owns the persistent player ID it's trying to update
-      if (!socket.persistentPlayerId || socket.persistentPlayerId !== data.playerId) {
-        console.log(`Socket ${socket.id} attempted to update username for ${data.playerId} but does not own that ID`);
+      if (socket.persistentPlayerId !== data.playerId) {
+        console.log(`Socket ${socket.id} attempted to update username for ${data.playerId} but does not own that ID (has ${socket.persistentPlayerId})`);
         if (typeof callback === 'function') callback({ success: false, error: 'Unauthorized' });
         return;
       }
@@ -2118,6 +2161,7 @@ io.on('connection', (socket) => {
       // Disallow socket-based updates for accounts linked to Google
       try {
         const playerRow = await db.getPlayerRaw(data.playerId);
+        console.log('Player raw data for', data.playerId, ':', playerRow ? { id: playerRow.id, google_id: playerRow.google_id, username: playerRow.username } : 'null');
         if (playerRow && playerRow.google_id) {
           console.log(`Blocked socket username update for Google-linked account ${data.playerId}`);
           if (typeof callback === 'function') callback({ success: false, error: 'Cannot change Google-linked account via socket' });

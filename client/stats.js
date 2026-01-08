@@ -2,7 +2,20 @@ const socket = io();
 
 // Get player ID
 let playerId = localStorage.getItem('tankGamePlayerId');
-let username = localStorage.getItem('tankGameUsername');
+let username = null; // Will be fetched from server
+
+// Fetch username from server
+async function fetchUsername() {
+  try {
+    const response = await fetch(`/api/player/${playerId}`);
+    const data = await response.json();
+    if (data.success && data.player) {
+      username = data.player.username;
+    }
+  } catch (err) {
+    console.error('Error fetching username:', err);
+  }
+}
 
 // Check if coming from a game (for rejoin)
 const urlParams = new URLSearchParams(window.location.search);
@@ -27,7 +40,8 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // Load personal stats and leaderboard
-function loadStats() {
+async function loadStats() {
+  await fetchUsername();
   socket.emit('getPersonalStats', { playerId });
   loadLeaderboard();
 }

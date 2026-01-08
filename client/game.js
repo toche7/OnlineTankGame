@@ -37,11 +37,23 @@ let selectedMelody = 'battle'; // Default melody
 
 // Get persistent player ID
 let persistentPlayerId = localStorage.getItem('tankGamePlayerId');
-let username = localStorage.getItem('tankGameUsername');
+let username = null; // Will be fetched from server
 
 // Initialize game when connected
-socket.on('connect', () => {
+socket.on('connect', async () => {
   console.log('Connected to server, initializing game with code:', gameCode, 'wasHost:', wasHost);
+  
+  // Fetch username from server
+  try {
+    const response = await fetch(`/api/player/${persistentPlayerId}`);
+    const data = await response.json();
+    if (data.success && data.player) {
+      username = data.player.username;
+    }
+  } catch (err) {
+    console.error('Error fetching username:', err);
+  }
+  
   socket.emit('initGame', { 
     gameCode: gameCode, 
     wasHost: wasHost,
