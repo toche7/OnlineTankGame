@@ -77,6 +77,8 @@ const translations = {
     save: "บันทึก",
     cancel: "ยกเลิก",
     close: "ปิด",
+    loginWithGoogle: "เข้าสู่ระบบด้วย Google",
+    logout: "ออกจากระบบ",
     
     // Status Messages
     waitingForPlayers: "รอผู้เล่นเข้าร่วม...",
@@ -201,6 +203,8 @@ const translations = {
     save: "Save",
     cancel: "Cancel",
     close: "Close",
+    loginWithGoogle: "Login with Google",
+    logout: "Logout",
     
     // Status Messages
     waitingForPlayers: "Waiting for players to join...",

@@ -68,7 +68,7 @@ async function checkAuth() {
 
       playerNameDisplay.textContent = username;
       playerNameDisplay.style.color = '#4caf50'; // Green for signed-in users (theme)
-      loginBtn.textContent = 'Logout';
+      loginBtn.textContent = (typeof langManager !== 'undefined') ? langManager.t('logout') : 'Logout';
       loginBtn.onclick = () => window.location.href = '/logout';
       
       // Allow using the same change-name modal for authenticated users
@@ -79,7 +79,7 @@ async function checkAuth() {
 
       playerNameDisplay.textContent = username || 'Guest';
       playerNameDisplay.style.color = 'white'; // Default color for anonymous users
-      loginBtn.textContent = 'Login with Google';
+      loginBtn.textContent = (typeof langManager !== 'undefined') ? langManager.t('loginWithGoogle') : 'Login with Google';
       loginBtn.onclick = () => window.location.href = '/auth/google';
       changeNameBtn.style.display = 'inline-block';
     }
@@ -87,6 +87,21 @@ async function checkAuth() {
     console.error('Error checking auth:', error);
   }
 }
+
+// Update auth button text when language changes
+window.addEventListener('languageChange', () => {
+  try {
+    const loginBtn = document.getElementById('loginBtn');
+    if (!loginBtn) return;
+    if (isAuthenticated) {
+      loginBtn.textContent = (typeof langManager !== 'undefined') ? langManager.t('logout') : 'Logout';
+    } else {
+      loginBtn.textContent = (typeof langManager !== 'undefined') ? langManager.t('loginWithGoogle') : 'Login with Google';
+    }
+  } catch (e) {
+    console.error('Failed to update login button on language change', e);
+  }
+});
 
 // Format timestamp to readable date
 function formatTimestamp(timestamp) {
