@@ -264,6 +264,19 @@ const usernameInput = document.getElementById('usernameInput');
 const saveUsernameBtn = document.getElementById('saveUsernameBtn');
 const cancelUsernameBtn = document.getElementById('cancelUsernameBtn');
 const changeNameBtn = document.getElementById('changeNameBtn');
+const usernameModalError = document.getElementById('usernameModalError');
+
+function showUsernameModalError(message) {
+  if (!usernameModalError) {
+    showError(message);
+    return;
+  }
+  usernameModalError.textContent = message;
+  usernameModalError.classList.remove('hidden');
+  setTimeout(() => {
+    usernameModalError.classList.add('hidden');
+  }, 5000);
+}
 
 // Username modal handlers
 changeNameBtn.addEventListener('click', () => {
@@ -295,11 +308,11 @@ saveUsernameBtn.addEventListener('click', () => {
             usernameModal.classList.add('hidden');
             showStatus('Username updated!');
           } else {
-            showError(result.error || 'Failed to change name');
+            showUsernameModalError(result.error || 'Failed to change name');
           }
         } catch (err) {
           console.error('Error changing name for auth user', err);
-          showError('Error changing name');
+          showUsernameModalError('Error changing name');
         }
       })();
     } else {
@@ -312,12 +325,12 @@ saveUsernameBtn.addEventListener('click', () => {
           usernameModal.classList.add('hidden');
           showStatus('Username updated!');
         } else {
-          showError(resp && resp.error ? resp.error : 'Failed to update username');
+          showUsernameModalError(resp && resp.error ? resp.error : 'Failed to update username');
         }
       });
     }
   } else {
-    showError('Username must be at least 2 characters');
+    showUsernameModalError('Username must be at least 2 characters');
   }
 });
 

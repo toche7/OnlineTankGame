@@ -52,6 +52,17 @@ try {
   const usernameInput = document.getElementById('usernameInput');
   const saveUsernameBtn = document.getElementById('saveUsernameBtn');
   const cancelUsernameBtn = document.getElementById('cancelUsernameBtn');
+  const usernameModalError = document.getElementById('usernameModalError');
+
+  function showUsernameModalError(message) {
+    if (!usernameModalError) {
+      showError(message);
+      return;
+    }
+    usernameModalError.textContent = message;
+    usernameModalError.classList.remove('hidden');
+    setTimeout(() => usernameModalError.classList.add('hidden'), 5000);
+  }
 
   if (changeNameBtn) {
     changeNameBtn.addEventListener('click', () => {
@@ -73,7 +84,7 @@ try {
     saveUsernameBtn.addEventListener('click', () => {
       const newName = usernameInput.value.trim();
       if (!newName || newName.length < 2) {
-        showError('Username must be at least 2 characters');
+        showUsernameModalError('Username must be at least 2 characters');
         return;
       }
       // Emit update request and handle ack
@@ -84,7 +95,7 @@ try {
           if (usernameModal) usernameModal.classList.add('hidden');
           showStatus('Username updated!');
         } else {
-          showError(resp && resp.error ? resp.error : 'Failed to update username');
+          showUsernameModalError(resp && resp.error ? resp.error : 'Failed to update username');
         }
       });
     });
