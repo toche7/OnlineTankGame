@@ -1,11 +1,20 @@
 const { Pool } = require('pg');
+const crypto = require('crypto');
 require('dotenv').config();
+
+// Max player name length (keep in sync with server)
+const MAX_NAME_LENGTH = 15;
 
 // Create PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+
+// Helper to generate guest player names
+function genGuestName() {
+  return `Player_${crypto.randomInt(100000, 999999)}`;
+}
 
 // Connection event handlers
 pool.on('connect', () => {
@@ -24,6 +33,8 @@ async function initDatabase() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS players (
         id VARCHAR(50) PRIMARY KEY,
+        google_id VARCHAR(255) UNIQUE,
+        email VARCHAR(255),
         username VARCHAR(100) NOT NULL,
         tank_color VARCHAR(7),
         games_played INTEGER DEFAULT 0,
@@ -56,9 +67,16 @@ async function initDatabase() {
       )
     `);
 
+    // Add new columns if they don't exist (for migration)
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE`);
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS email VARCHAR(255)`);
+
     // Create indexes for performance
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_players_username ON players(username)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_players_google_id ON players(google_id)
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_players_wins ON players(wins DESC)
@@ -89,18 +107,19 @@ async function getPlayer(playerId, username) {
     // Check if player exists
     let result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
     
-    if (result.rows.length === 0) {
-      // Create new player
-      const defaultUsername = username || `Player_${playerId.substr(0, 6)}`;
-      await client.query(`
-        INSERT INTO players (id, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
-        VALUES ($1, $2, NULL, 0, 0, 0, 0, 0, 0, $3)
-      `, [playerId, defaultUsername, Date.now()]);
+      if (result.rows.length === 0) {
+          // Create new player
+          const defaultUsername = username ? String(username).trim().slice(0, MAX_NAME_LENGTH) : genGuestName();
+        await client.query(`
+          INSERT INTO players (id, google_id, email, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
+          VALUES ($1, NULL, NULL, $2, NULL, 0, 0, 0, 0, 0, 0, $3)
+        `, [playerId, defaultUsername, Date.now()]);
       
       result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
     } else if (username && username !== result.rows[0].username) {
-      // Update username if provided and different
-      await client.query('UPDATE players SET username = $1, updated_at = NOW() WHERE id = $2', [username, playerId]);
+      // Update username if provided and different (trim and enforce max length)
+      const safeUsername = String(username).trim().slice(0, MAX_NAME_LENGTH);
+      await client.query('UPDATE players SET username = $1, updated_at = NOW() WHERE id = $2', [safeUsername, playerId]);
       result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
     }
     
@@ -138,9 +157,9 @@ async function updatePlayerStats(playerId, gameStats) {
     if (result.rows.length === 0) {
       // Create player if doesn't exist
       await client.query(`
-        INSERT INTO players (id, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
-        VALUES ($1, $2, NULL, 0, 0, 0, 0, 0, 0, $3)
-      `, [playerId, `Player_${playerId.substr(0, 6)}`, Date.now()]);
+        INSERT INTO players (id, google_id, email, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
+        VALUES ($1, NULL, NULL, $2, NULL, 0, 0, 0, 0, 0, 0, $3)
+      `, [playerId, genGuestName(), Date.now()]);
       result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
     }
     
@@ -220,11 +239,12 @@ async function getLeaderboard(sortBy = 'wins', limit = 100) {
       LIMIT $1
     `, [limit]);
     
-    // Transform to match current format
+    // Transform to match current format and include Google login flag
     return result.rows.map(player => ({
       id: player.id,
       username: player.username,
       tankColor: player.tank_color,
+      isGoogle: !!player.google_id,
       stats: {
         gamesPlayed: player.games_played,
         wins: player.wins,
@@ -296,9 +316,9 @@ async function saveGameRecord(playerId, gameRecord) {
     if (result.rows.length === 0) {
       // Create player if doesn't exist
       await client.query(`
-        INSERT INTO players (id, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
-        VALUES ($1, $2, NULL, 0, 0, 0, 0, 0, 0, $3)
-      `, [playerId, `Player_${playerId.substr(0, 6)}`, Date.now()]);
+        INSERT INTO players (id, google_id, email, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
+        VALUES ($1, NULL, NULL, $2, NULL, 0, 0, 0, 0, 0, 0, $3)
+      `, [playerId, genGuestName(), Date.now()]);
     }
     
     // Insert game record
@@ -388,10 +408,10 @@ async function updatePlayerColor(playerId, color) {
     
     if (result.rows.length === 0) {
       // Create player if doesn't exist
-      await client.query(`
-        INSERT INTO players (id, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
-        VALUES ($1, $2, $3, 0, 0, 0, 0, 0, 0, $4)
-      `, [playerId, `Player_${playerId.substr(0, 6)}`, color, Date.now()]);
+        await client.query(`
+          INSERT INTO players (id, google_id, email, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
+          VALUES ($1, NULL, NULL, $2, $3, 0, 0, 0, 0, 0, 0, $4)
+        `, [playerId, genGuestName(), color, Date.now()]);
     } else {
       // Update color
       await client.query('UPDATE players SET tank_color = $1, updated_at = NOW() WHERE id = $2', [color, playerId]);
@@ -429,6 +449,112 @@ async function closePool() {
   console.log('PostgreSQL connection pool closed');
 }
 
+// Get player by Google ID
+async function getPlayerByGoogleId(googleId) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query('SELECT * FROM players WHERE google_id = $1', [googleId]);
+    if (result.rows.length === 0) {
+      return null;
+    }
+    const player = result.rows[0];
+    return {
+      id: player.id,
+      google_id: player.google_id,
+      email: player.email,
+      username: player.username,
+      tankColor: player.tank_color,
+      stats: {
+        gamesPlayed: player.games_played,
+        wins: player.wins,
+        kills: player.kills,
+        deaths: player.deaths,
+        totalScore: player.total_score,
+        highestKills: player.highest_kills,
+        lastPlayed: player.last_played
+      }
+    };
+  } catch (err) {
+    console.error('Error in getPlayerByGoogleId:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Return raw DB row for server-side checks
+async function getPlayerRaw(playerId) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
+    return result.rows.length ? result.rows[0] : null;
+  } catch (err) {
+    console.error('Error in getPlayerRaw:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Create new player with Google auth
+async function createPlayer(playerData) {
+  const client = await pool.connect();
+  try {
+    const safeUsername = playerData.username ? String(playerData.username).trim().slice(0, MAX_NAME_LENGTH) : genGuestName();
+    await client.query(`
+      INSERT INTO players (id, google_id, email, username, tank_color, games_played, wins, kills, deaths, total_score, highest_kills, last_played)
+      VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11)
+    `, [
+      playerData.id,
+      playerData.google_id,
+      playerData.email,
+      safeUsername,
+      playerData.stats.gamesPlayed,
+      playerData.stats.wins,
+      playerData.stats.kills,
+      playerData.stats.deaths,
+      playerData.stats.totalScore,
+      playerData.stats.highestKills,
+      playerData.stats.lastPlayed
+    ]);
+    return await getPlayer(playerData.id);
+  } catch (err) {
+    console.error('Error in createPlayer:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Update player username
+async function updatePlayerUsername(playerId, newUsername) {
+  const client = await pool.connect();
+  try {
+    const safeUsername = newUsername ? String(newUsername).trim().slice(0, MAX_NAME_LENGTH) : newUsername;
+    await client.query('UPDATE players SET username = $1, updated_at = NOW() WHERE id = $2', [safeUsername, playerId]);
+  } catch (err) {
+    console.error('Error updating username:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Check if username is taken by another player
+async function isUsernameTaken(username, excludePlayerId) {
+  const client = await pool.connect();
+  try {
+    const safe = username ? String(username).trim().slice(0, MAX_NAME_LENGTH) : username;
+    const result = await client.query('SELECT id FROM players WHERE username = $1 AND id != $2', [safe, excludePlayerId]);
+    return result.rows.length > 0;
+  } catch (err) {
+    console.error('Error checking username:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   initDatabase,
   getPlayer,
@@ -438,5 +564,11 @@ module.exports = {
   saveGameRecord,
   getLastGame,
   updatePlayerColor,
+  getPlayerByGoogleId,
+  createPlayer,
+  updatePlayerUsername,
+  isUsernameTaken,
+  // raw access for server-side checks
+  getPlayerRaw,
   closePool
 };

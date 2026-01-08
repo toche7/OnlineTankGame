@@ -105,8 +105,18 @@ socket.on('leaderboard', (players) => {
       <td>${kd}</td>
       <td>${winRate}%</td>
     `;
-    
+
+    // Color username: blue for Google-signed players, white otherwise
+    // Apply after innerHTML so cells exist
     tbody.appendChild(row);
+    try {
+      const nameCell = row.cells[1];
+        if (nameCell) {
+        nameCell.style.color = player.isGoogle ? '#4caf50' : 'white';
+      }
+    } catch (e) {
+      // ignore if cells not available
+    }
   });
 });
 

@@ -25,6 +25,7 @@ let currentGameCode = null;
 let isHost = false;
 let playersInGame = {};
 let currentGameMode = 'ai_solo'; // Track current game mode
+let isAuthenticated = false;
 
 // Last game data
 let lastGameData = null;
@@ -45,6 +46,45 @@ async function fetchLastGame() {
     }
   } catch (error) {
     console.error('Error fetching last game:', error);
+  }
+}
+
+// Check authentication status
+async function checkAuth() {
+  try {
+    const response = await fetch('/api/user');
+    const data = await response.json();
+    
+    const loginBtn = document.getElementById('loginBtn');
+    const changeNameBtn = document.getElementById('changeNameBtn');
+    const playerNameDisplay = document.getElementById('playerNameDisplay');
+    
+    if (data.authenticated) {
+      // User is logged in
+      playerId = data.user.id;
+      username = data.user.username;
+      localStorage.setItem('tankGamePlayerId', playerId);
+      isAuthenticated = true;
+
+      playerNameDisplay.textContent = username;
+      playerNameDisplay.style.color = '#4caf50'; // Green for signed-in users (theme)
+      loginBtn.textContent = 'Logout';
+      loginBtn.onclick = () => window.location.href = '/logout';
+      
+      // Allow using the same change-name modal for authenticated users
+      changeNameBtn.style.display = 'inline-block';
+    } else {
+      // Not logged in
+      isAuthenticated = false;
+
+      playerNameDisplay.textContent = username || 'Guest';
+      playerNameDisplay.style.color = 'white'; // Default color for anonymous users
+      loginBtn.textContent = 'Login with Google';
+      loginBtn.onclick = () => window.location.href = '/auth/google';
+      changeNameBtn.style.display = 'inline-block';
+    }
+  } catch (error) {
+    console.error('Error checking auth:', error);
   }
 }
 
@@ -161,6 +201,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // Fetch last game
   fetchLastGame();
   
+  // Check authentication
+  checkAuth();
+  
   const urlParams = new URLSearchParams(window.location.search);
   const rejoinCode = urlParams.get('rejoin');
   const oldSocketId = urlParams.get('oldSocketId');
@@ -168,6 +211,8 @@ window.addEventListener('DOMContentLoaded', () => {
   if (rejoinCode) {
     // Wait for socket to connect before rejoining
     socket.on('connect', () => {
+      // Register our persistent playerId with the server for ownership checks
+      socket.emit('registerPlayer', { playerId });
       console.log('Auto-rejoining game:', rejoinCode);
       socket.emit('rejoinLobby', { 
         gameCode: rejoinCode, 
@@ -183,6 +228,8 @@ window.addEventListener('DOMContentLoaded', () => {
   } else {
     // Request game browser status when page loads
     socket.on('connect', () => {
+      // Register our persistent playerId with the server for ownership checks
+      socket.emit('registerPlayer', { playerId });
       socket.emit('requestGameBrowserStatus');
     });
   }
@@ -232,13 +279,43 @@ cancelUsernameBtn.addEventListener('click', () => {
 saveUsernameBtn.addEventListener('click', () => {
   const newName = usernameInput.value.trim();
   if (newName && newName.length >= 2) {
-    username = newName;
-    localStorage.setItem('tankGameUsername', username);
-    updateUsernameDisplay();
-    usernameModal.classList.add('hidden');
-    // Notify server of name change
-    socket.emit('updateUsername', { playerId, username });
-    showStatus('Username updated!');
+    if (isAuthenticated) {
+      // Authenticated users: call server API to change name
+      (async () => {
+        try {
+          const resp = await fetch('/api/change-name', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ newName })
+          });
+          const result = await resp.json();
+          if (result.success) {
+            username = result.name;
+            updateUsernameDisplay();
+            usernameModal.classList.add('hidden');
+            showStatus('Username updated!');
+          } else {
+            showError(result.error || 'Failed to change name');
+          }
+        } catch (err) {
+          console.error('Error changing name for auth user', err);
+          showError('Error changing name');
+        }
+      })();
+    } else {
+      // Anonymous users: ask server to update (server will check uniqueness)
+      socket.emit('updateUsername', { playerId, username: newName }, (resp) => {
+        if (resp && resp.success) {
+          username = resp.name || newName;
+          localStorage.setItem('tankGameUsername', username);
+          updateUsernameDisplay();
+          usernameModal.classList.add('hidden');
+          showStatus('Username updated!');
+        } else {
+          showError(resp && resp.error ? resp.error : 'Failed to update username');
+        }
+      });
+    }
   } else {
     showError('Username must be at least 2 characters');
   }

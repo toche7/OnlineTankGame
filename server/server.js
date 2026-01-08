@@ -4,6 +4,10 @@ const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const db = require('./database');
+const crypto = require('crypto');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const session = require('express-session');
 const { version: VERSION } = require('../package.json');
 
 const app = express();
@@ -12,6 +16,66 @@ const io = socketIo(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
+  }
+});
+
+// Generate guest player name
+function genGuestName() {
+  return `Player_${crypto.randomInt(100000, 999999)}`;
+}
+
+// Max player name length
+const MAX_NAME_LENGTH = 15;
+
+// Session and Passport middleware
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: true
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Passport Google Strategy
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "/auth/google/callback"
+  },
+  function(accessToken, refreshToken, profile, done) {
+    (async () => {
+      try {
+        let user = await db.getPlayerByGoogleId(profile.id);
+        if (!user) {
+          // Create new user
+          const playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+          user = {
+            id: playerId,
+            google_id: profile.id,
+            username: profile.displayName,
+            email: profile.emails[0].value,
+            stats: { gamesPlayed: 0, wins: 0, kills: 0, deaths: 0, totalScore: 0, highestKills: 0, lastPlayed: Date.now() }
+          };
+          await db.createPlayer(user);
+        }
+        return done(null, user);
+      } catch (err) {
+        return done(err, null);
+      }
+    })();
+  }
+));
+
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await db.getPlayer(id);
+    done(null, user);
+  } catch (err) {
+    done(err, null);
   }
 });
 
@@ -34,6 +98,44 @@ app.use(express.json());
 // API route to get game version
 app.get('/api/version', (req, res) => {
   res.json({ version: VERSION });
+});
+
+// API route to get current user
+app.get('/api/user', (req, res) => {
+  if (req.user) {
+    res.json({ authenticated: true, user: req.user });
+  } else {
+    res.json({ authenticated: false });
+  }
+});
+
+// API route to change player name
+app.post('/api/change-name', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  const { newName } = req.body;
+  if (!newName || newName.trim().length === 0) {
+    return res.status(400).json({ error: 'Name cannot be empty' });
+  }
+  const trimmed = String(newName).trim();
+  if (trimmed.length < 2 || trimmed.length > MAX_NAME_LENGTH) {
+    return res.status(400).json({ error: `Name must be between 2 and ${MAX_NAME_LENGTH} characters` });
+  }
+  try {
+    // Check if name is already taken
+    const isTaken = await db.isUsernameTaken(newName.trim(), req.user.id);
+    if (isTaken) {
+      return res.status(409).json({ error: 'Name already in use' });
+    }
+    // Update name
+    const safeName = trimmed.slice(0, MAX_NAME_LENGTH);
+    await db.updatePlayerUsername(req.user.id, safeName);
+    res.json({ success: true, name: safeName });
+  } catch (err) {
+    console.error('Error changing name:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // API route to get last game for a player
@@ -68,6 +170,33 @@ app.post('/api/player/updateColor', async (req, res) => {
     console.error('Error updating player color:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
+});
+
+// Auth routes
+app.get('/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+app.get('/auth/google/callback', 
+  passport.authenticate('google', { failureRedirect: '/' }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect('/');
+  });
+
+app.get('/logout', (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      console.error('Logout error:', err);
+      return res.status(500).send('Logout failed');
+    }
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destroy error:', err);
+        return res.status(500).send('Session destroy failed');
+      }
+      res.redirect('/');
+    });
+  });
 });
 
 // Game state
@@ -618,7 +747,7 @@ class Tank {
   constructor(id, obstacles, isAI = false, aiDifficulty = 'medium', persistentPlayerId = null, username = null, team = null, color = null) {
     this.id = id; // Socket ID for real-time communication
     this.persistentPlayerId = persistentPlayerId || id; // Persistent player ID for stats
-    this.username = username || `Player_${id.substr(0, 6)}`;
+    this.username = username || genGuestName();
     this.color = color; // Custom tank color (null = use default green/red)
     this.isAI = isAI;
     this.team = team; // 'human' or 'ai' for co-op mode, null for free-for-all
@@ -924,6 +1053,19 @@ function broadcastGameBrowserStatus() {
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
+  // Allow client to register its persistent player ID for ownership checks
+  socket.on('registerPlayer', async (data) => {
+    try {
+      if (data && data.playerId) {
+        socket.persistentPlayerId = data.playerId;
+        // Ensure player exists in DB (create if needed) but do not overwrite username
+        await db.getPlayer(data.playerId);
+        console.log(`Socket ${socket.id} registered persistent player ID ${data.playerId}`);
+      }
+    } catch (err) {
+      console.error('Error in registerPlayer:', err);
+    }
+  });
   
   // Send game browser status when requested
   socket.on('requestGameBrowserStatus', () => {
@@ -946,7 +1088,7 @@ io.on('connection', (socket) => {
   // Lobby event handlers
   socket.on('createGame', async (data) => {
     const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
-    const username = data?.username || `Player_${playerId.substr(0, 6)}`;
+    const username = data?.username || genGuestName();
     const tankColor = data?.tankColor || null;
     
     // Register/update player in database
@@ -986,6 +1128,8 @@ io.on('connection', (socket) => {
       tankColor: tankColor,
       isHost: true
     };
+    // Associate this socket with the persistent player id
+    socket.persistentPlayerId = playerId;
     
     socket.join(gameCode);
     socket.gameCode = gameCode;
@@ -1005,7 +1149,7 @@ io.on('connection', (socket) => {
   socket.on('joinGame', (data) => {
     const gameCode = data.gameCode.toUpperCase();
     const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
-    const username = data?.username || `Player_${playerId.substr(0, 6)}`;
+    const username = data?.username || genGuestName();
     const tankColor = data?.tankColor || null;
     
     if (!lobbies[gameCode]) {
@@ -1030,6 +1174,8 @@ io.on('connection', (socket) => {
       tankColor: tankColor,
       isHost: false
     };
+    // Associate this socket with the persistent player id
+    socket.persistentPlayerId = playerId;
     
     // Update last activity timestamp
     lobbies[gameCode].lastActivity = Date.now();
@@ -1087,6 +1233,11 @@ io.on('connection', (socket) => {
       delete lobbies[gameCode].players[data.oldSocketId];
       console.log(`Removed old socket ID ${data.oldSocketId} from game ${gameCode}, saved team: ${oldPlayerData.team}`);
     }
+
+    // Associate this socket with the persistent player id provided
+    if (data.playerId) {
+      socket.persistentPlayerId = data.playerId;
+    }
     
     // If old host rejoins, maintain host status and update originalHost
     if (wasHost) {
@@ -1123,7 +1274,7 @@ io.on('connection', (socket) => {
     lobbies[gameCode].players[socket.id] = {
       id: socket.id,
       playerId: data.playerId,
-      username: data.username || (oldPlayerData?.username) || `Player_${socket.id.substr(0, 6)}`,
+      username: data.username || (oldPlayerData?.username) || genGuestName(),
       tankColor: data.tankColor || (oldPlayerData?.tankColor) || null,
       isHost: isHost,
       team: oldPlayerData?.team || null // Preserve team from old data
@@ -1454,7 +1605,7 @@ io.on('connection', (socket) => {
   socket.on('initGame', async (data) => {
     const gameCode = data.gameCode;
     const persistentPlayerId = data.playerId || socket.id;
-    const username = data.username || `Player_${socket.id.substr(0, 6)}`;
+    const username = data.username || genGuestName();
     
     // Register/update player in database
     await db.getPlayer(persistentPlayerId, username);
@@ -1785,12 +1936,64 @@ io.on('connection', (socket) => {
   });
 
   // Stats socket handlers
-  socket.on('updateUsername', async (data) => {
+  // Handle username update requests from sockets. Uses callback ack to inform client of result.
+  socket.on('updateUsername', async (data, callback) => {
     try {
-      await db.getPlayer(data.playerId, data.username);
-      console.log(`Username updated: ${data.username} (${data.playerId})`);
+      if (!data || !data.username || !data.playerId) {
+        if (typeof callback === 'function') callback({ success: false, error: 'Invalid request' });
+        return;
+      }
+
+      // Ensure the socket owns the persistent player ID it's trying to update
+      if (!socket.persistentPlayerId || socket.persistentPlayerId !== data.playerId) {
+        console.log(`Socket ${socket.id} attempted to update username for ${data.playerId} but does not own that ID`);
+        if (typeof callback === 'function') callback({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const raw = String(data.username).trim();
+
+      // Disallow socket-based updates for accounts linked to Google
+      try {
+        const playerRow = await db.getPlayerRaw(data.playerId);
+        if (playerRow && playerRow.google_id) {
+          console.log(`Blocked socket username update for Google-linked account ${data.playerId}`);
+          if (typeof callback === 'function') callback({ success: false, error: 'Cannot change Google-linked account via socket' });
+          return;
+        }
+      } catch (err) {
+        console.error('Error checking player raw data:', err);
+        if (typeof callback === 'function') callback({ success: false, error: 'Server error' });
+        return;
+      }
+
+      if (raw.length < 2 || raw.length > MAX_NAME_LENGTH) {
+        console.log(`Ignored username update (invalid length): ${raw}`);
+        if (typeof callback === 'function') callback({ success: false, error: `Name must be between 2 and ${MAX_NAME_LENGTH} characters` });
+        return;
+      }
+
+      const safeName = raw.slice(0, MAX_NAME_LENGTH);
+
+      // Check uniqueness
+      try {
+        const taken = await db.isUsernameTaken(safeName, data.playerId);
+        if (taken) {
+          if (typeof callback === 'function') callback({ success: false, error: 'Name already in use' });
+          return;
+        }
+      } catch (err) {
+        console.error('Error checking username uniqueness:', err);
+        if (typeof callback === 'function') callback({ success: false, error: 'Server error' });
+        return;
+      }
+
+      await db.getPlayer(data.playerId, safeName);
+      console.log(`Username updated: ${safeName} (${data.playerId}) by socket ${socket.id}`);
+      if (typeof callback === 'function') callback({ success: true, name: safeName });
     } catch (error) {
       console.error('Error updating username:', error);
+      if (typeof callback === 'function') callback({ success: false, error: 'Server error' });
     }
   });
 
