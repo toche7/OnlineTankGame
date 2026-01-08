@@ -54,6 +54,34 @@ try {
   const cancelUsernameBtn = document.getElementById('cancelUsernameBtn');
   const usernameModalError = document.getElementById('usernameModalError');
 
+  // Language toggle initialization (lobby)
+  (function initLangToggle() {
+    const btn = document.getElementById('langToggleBtn');
+    if (!btn || typeof langManager === 'undefined') return;
+    const LANGS = ['en', 'th'];
+    const LABEL = { en: 'EN', th: 'TH' };
+
+    function current() {
+      return langManager.getCurrentLanguage ? langManager.getCurrentLanguage() : (localStorage.getItem('gameLanguage') || 'th');
+    }
+
+    function set(lang) {
+      if (!langManager.setLanguage) return;
+      langManager.setLanguage(lang);
+      btn.setAttribute('aria-pressed', String(lang !== 'en'));
+      const opposite = (lang === 'en') ? 'th' : 'en';
+      btn.textContent = LABEL[opposite] || opposite.toUpperCase();
+      window.dispatchEvent(new CustomEvent('languageChange', { detail: { lang } }));
+    }
+
+    btn.addEventListener('click', () => {
+      const next = current() === LANGS[0] ? LANGS[1] : LANGS[0];
+      set(next);
+    });
+
+    set(current());
+  })();
+
   function showUsernameModalError(message) {
     if (!usernameModalError) {
       showError(message);

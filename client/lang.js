@@ -312,6 +312,14 @@ class LanguageManager {
         btn.classList.remove('active');
       }
     });
+    // Update toggle button if present
+    const toggle = document.getElementById('langToggleBtn');
+    if (toggle) {
+      const code = this.currentLang || 'th';
+      const opposite = (code === 'en') ? 'TH' : 'EN';
+      toggle.textContent = opposite;
+      toggle.setAttribute('aria-pressed', String(code !== 'en'));
+    }
   }
 }
 
