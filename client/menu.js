@@ -103,6 +103,40 @@ window.addEventListener('languageChange', () => {
   }
 });
 
+// Advanced settings toggle behavior
+function initAdvancedToggles() {
+  document.querySelectorAll('.advanced-toggle').forEach(btn => {
+    const adv = btn.nextElementSibling;
+    if (!adv || !adv.classList.contains('advanced-settings')) return;
+    // initialize aria state
+    btn.setAttribute('aria-expanded', adv.classList.contains('hidden') ? 'false' : 'true');
+    adv.setAttribute('aria-hidden', adv.classList.contains('hidden') ? 'true' : 'false');
+    btn.addEventListener('click', () => {
+      const isHidden = adv.classList.toggle('hidden');
+      btn.setAttribute('aria-expanded', String(!isHidden));
+      adv.setAttribute('aria-hidden', String(isHidden));
+    });
+  });
+}
+
+// Initialize when DOM content loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    initAdvancedToggles();
+  });
+} else {
+  initAdvancedToggles();
+}
+
+// Keep toggle label updated on language change
+window.addEventListener('languageChange', () => {
+  try {
+    document.querySelectorAll('.advanced-toggle').forEach(btn => {
+      if (typeof langManager !== 'undefined') btn.textContent = langManager.t('advancedSettings');
+    });
+  } catch (e) { console.error(e); }
+});
+
 // Format timestamp to readable date
 function formatTimestamp(timestamp) {
   const date = new Date(timestamp);

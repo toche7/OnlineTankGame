@@ -185,7 +185,6 @@ OnlineTankGame/
 ├── client/
 │   ├── game.html          # Game canvas page
 │   ├── game.js            # Game client logic
-│   ├── lobby.html         # Game lobby page
 │   ├── lobby.js           # Lobby client logic
 │   ├── lobby.css          # Lobby styling
 │   ├── menu.html          # Main menu page

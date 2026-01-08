@@ -113,52 +113,28 @@
         
         <div id="hostControls" class="host-controls hidden">
             <div class="game-settings">
-              <label for="tankSpeed" data-i18n="tankSpeed">Tank Speed:</label>
-              <select id="tankSpeed">
-                <option value="1.5" data-i18n="slow">Slow</option>
-                <option value="3" selected data-i18n="normal">Normal</option>
-                <option value="5" data-i18n="fast">Fast</option>
-                <option value="7" data-i18n="veryFast">Very Fast</option>
-              </select>
-              
-              <label for="melodyChoice" data-i18n="backgroundMusic">Background Music:</label>
-              <select id="melodyChoice">
-                <option value="battle" selected data-i18n="battleTheme">Battle Theme</option>
-                <option value="classic" data-i18n="classic">Classic</option>
-                <option value="intense" data-i18n="intenseCombat">Intense Combat</option>
-                <option value="chill" data-i18n="chillVibes">Chill Vibes</option>
-                <option value="epic" data-i18n="epicAdventure">Epic Adventure</option>
-                <option value="retro" data-i18n="retroGaming">Retro Gaming</option>
-              </select>
-              
-              <label for="debugMode" style="display: flex; align-items: center; margin-top: 10px;">
-                <input type="checkbox" id="debugMode" style="margin-right: 5px;">
-                <span data-i18n="debugMode">🐛 Debug Mode (One-hit kill)</span>
-              </label>
-              
-              <label for="weaponsEnabled" style="display: flex; align-items: center; margin-top: 5px;">
-                <input type="checkbox" id="weaponsEnabled" checked style="margin-right: 5px;">
-                <span data-i18n="enableWeapons">🎯 Enable Special Weapons</span>
-              </label>
-              
-              <label for="powerupsEnabled" style="display: flex; align-items: center; margin-top: 5px;">
-                <input type="checkbox" id="powerupsEnabled" checked style="margin-right: 5px;">
-                <span data-i18n="enablePowerups">⚡ Enable Power-ups</span>
-              </label>
-              
-              <label for="limitedAmmo" style="display: flex; align-items: center; margin-top: 5px;">
-                <input type="checkbox" id="limitedAmmo" style="margin-right: 5px;">
-                <span data-i18n="limitedAmmo">🎯 Limited Ammo (20 bullets, regenerate over time)</span>
-              </label>
-              
-              <label for="gameMode" data-i18n="gameMode">🎮 Game Mode:</label>
-              <select id="gameMode">
-                <option value="ai_solo" selected data-i18n="soloVsAI">Solo vs AI Bots</option>
-                <option value="ai_coop" data-i18n="coopVsAI">Co-op vs AI Bots</option>
-                <option value="ai_mixed" data-i18n="multiplayerAI">Multiplayer + AI Fill</option>
-                <option value="multiplayer" data-i18n="multiplayerOnly">Multiplayer Only</option>
-                <option value="team_pvp" data-i18n="teamPvP">Team vs Team (PvP)</option>
-              </select>
+              <div class="game-mode">
+                <label for="gameMode" data-i18n="gameMode">🎮 Game Mode:</label>
+                <select id="gameMode">
+                  <option value="ai_solo" selected data-i18n="soloVsAI">Solo vs AI Bots</option>
+                  <option value="ai_coop" data-i18n="coopVsAI">Co-op vs AI Bots</option>
+                  <option value="ai_mixed" data-i18n="multiplayerAI">Multiplayer + AI Fill</option>
+                  <option value="multiplayer" data-i18n="multiplayerOnly">Multiplayer Only</option>
+                  <option value="team_pvp" data-i18n="teamPvP">Team vs Team (PvP)</option>
+                </select>
+              </div>
+
+              <div class="tank-speed">
+                <label for="tankSpeed" data-i18n="tankSpeed">Tank Speed:</label>
+                <select id="tankSpeed">
+                  <option value="1.5" data-i18n="slow">Slow</option>
+                  <option value="3" selected data-i18n="normal">Normal</option>
+                  <option value="5" data-i18n="fast">Fast</option>
+                  <option value="7" data-i18n="veryFast">Very Fast</option>
+                </select>
+              </div>
+
+              <!-- Advanced settings moved below AI settings -->
               
               <div id="aiSettings" style="display: none; margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 5px;">
                 <label for="aiDifficulty" data-i18n="aiDifficulty">🤖 AI Difficulty:</label>
@@ -170,6 +146,40 @@
                 
                 <label for="aiCount" style="margin-top: 5px;" data-i18n="aiCount">🤖 Number of AI Bots:</label>
                 <input type="number" id="aiCount" min="1" max="9" value="3" style="width: 60px; padding: 5px;">
+              </div>
+              
+              <!-- Advanced settings (general config) placed outside AI settings -->
+              <button type="button" class="advanced-toggle btn" aria-expanded="false" data-i18n="advancedSettings">Advanced Settings</button>
+              <div class="advanced-settings hidden" aria-hidden="true">
+                <label for="melodyChoice" data-i18n="backgroundMusic">Background Music:</label>
+                <select id="melodyChoice">
+                  <option value="battle" selected data-i18n="battleTheme">Battle Theme</option>
+                  <option value="classic" data-i18n="classic">Classic</option>
+                  <option value="intense" data-i18n="intenseCombat">Intense Combat</option>
+                  <option value="chill" data-i18n="chillVibes">Chill Vibes</option>
+                  <option value="epic" data-i18n="epicAdventure">Epic Adventure</option>
+                  <option value="retro" data-i18n="retroGaming">Retro Gaming</option>
+                </select>
+
+                <label for="debugMode" style="display: flex; align-items: center; margin-top: 10px;">
+                  <input type="checkbox" id="debugMode" style="margin-right: 5px;">
+                  <span data-i18n="debugMode">🐛 Debug Mode (One-hit kill)</span>
+                </label>
+
+                <label for="weaponsEnabled" style="display: flex; align-items: center; margin-top: 5px;">
+                  <input type="checkbox" id="weaponsEnabled" checked style="margin-right: 5px;">
+                  <span data-i18n="enableWeapons">🎯 Enable Special Weapons</span>
+                </label>
+
+                <label for="powerupsEnabled" style="display: flex; align-items: center; margin-top: 5px;">
+                  <input type="checkbox" id="powerupsEnabled" checked style="margin-right: 5px;">
+                  <span data-i18n="enablePowerups">⚡ Enable Power-ups</span>
+                </label>
+
+                <label for="limitedAmmo" style="display: flex; align-items: center; margin-top: 5px;">
+                  <input type="checkbox" id="limitedAmmo" style="margin-right: 5px;">
+                  <span data-i18n="limitedAmmo">🎯 Limited Ammo (20 bullets, regenerate over time)</span>
+                </label>
               </div>
             </div>
             <button id="startGameBtn" class="btn btn-primary" data-i18n="startGame">Start Game</button>

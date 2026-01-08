@@ -79,6 +79,7 @@ const translations = {
     close: "ปิด",
     loginWithGoogle: "เข้าสู่ระบบด้วย Google",
     logout: "ออกจากระบบ",
+    advancedSettings: "การตั้งค่าขั้นสูง",
     
     // Status Messages
     waitingForPlayers: "รอผู้เล่นเข้าร่วม...",
@@ -205,6 +206,7 @@ const translations = {
     close: "Close",
     loginWithGoogle: "Login with Google",
     logout: "Logout",
+    advancedSettings: "Advanced Settings",
     
     // Status Messages
     waitingForPlayers: "Waiting for players to join...",

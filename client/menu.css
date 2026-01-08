@@ -218,23 +218,47 @@ h4 {
 }
 
 .game-info {
-  background: rgba(76, 175, 80, 0.2);
-  padding: 15px;
-  border-radius: 10px;
-  margin-bottom: 20px;
-  text-align: center;
+  background: rgba(76, 175, 80, 0.18);
+  padding: 18px 22px;
+  border-radius: 12px;
+  margin: 0 auto 20px auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 960px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+
+.game-info p {
+  margin: 0;
+  color: #e8f5e9;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1rem;
 }
 
 .game-code {
-  font-size: 2rem;
-  font-weight: bold;
-  color: #ffeb3b;
-  letter-spacing: 3px;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #ffd54f;
+  letter-spacing: 2px;
   display: inline-block;
-  padding: 5px 15px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 5px;
-  margin-left: 10px;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+}
+
+/* Responsive: stack items vertically on narrow screens */
+@media (max-width: 640px) {
+  .game-info {
+    flex-direction: column;
+    text-align: center;
+    padding: 14px;
+  }
+  .game-info p { font-size: 0.95rem; }
+  .game-code { font-size: 1.4rem; margin-top: 6px; }
 }
 
 .players-list {
@@ -268,6 +292,58 @@ h4 {
   border-radius: 8px;
   margin-bottom: 15px;
   text-align: left;
+}
+
+/* Ensure game settings layout is a vertical flow so reordering works cleanly */
+.game-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-settings .game-mode,
+.game-settings .tank-speed {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Advanced settings collapse */
+.advanced-toggle {
+  display: block; /* force new-line */
+  margin-top: 8px;
+  background: rgba(255,255,255,0.05);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  max-width: 260px; /* keep button from stretching too wide */
+}
+
+.advanced-toggle[aria-expanded="true"] {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(100,181,246,0.4);
+}
+
+.advanced-settings {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+  transition: max-height 220ms ease, opacity 200ms ease;
+  overflow: hidden;
+}
+
+.advanced-settings.hidden {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.advanced-settings:not(.hidden) {
+  max-height: 800px; /* large enough to reveal content */
+  opacity: 1;
 }
 
 .game-settings label {
