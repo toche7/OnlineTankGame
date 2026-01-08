@@ -286,6 +286,19 @@
       </div>
     </div>
     
+    <!-- Lobby Chat Container (moved above How to Play) -->
+    <div id="lobbyChat" style="margin: 12px 0; background: rgba(0,0,0,0.25); padding:10px; border-radius:6px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <strong id="chatTitle" style="font-size:1rem;">Main Chat Board</strong>
+        <small id="lobbyChatHint" style="color:#cfd8dc;">Global Chat (menu)</small>
+      </div>
+      <div id="chatMessages" style="height:320px; overflow:auto; background:rgba(0,0,0,0.15); padding:8px; border-radius:4px; color:#e0f7fa; font-size:0.95rem;"></div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <input id="chatInput" type="text" placeholder="Type a message..." style="flex:1; padding:8px; border-radius:4px; border:1px solid rgba(255,255,255,0.08); background:transparent; color:white;" disabled>
+        <button id="chatSendBtn" class="btn-small" style="padding:8px 12px;" disabled>Send</button>
+      </div>
+    </div>
+
     <div class="info-section">
       <h3 data-i18n="howToPlay">How to Play</h3>
       <ul>

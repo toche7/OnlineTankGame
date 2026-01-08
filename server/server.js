@@ -255,6 +255,15 @@ const playersReadyToRestart = new Set(); // Track which players are ready to res
 // Lobby management
 const lobbies = {}; // { gameCode: { players: {}, host: socketId, state: 'waiting'|'playing'|'finished' } }
 
+// Global chat history (keeps recent messages for new clients)
+const GLOBAL_CHAT_HISTORY_LIMIT = 200;
+const globalChatHistory = [];
+
+// Helper to generate unique message IDs
+function genMessageId() {
+  return Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+}
+
 function generateGameCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded similar looking chars
   let code = '';
@@ -1097,6 +1106,24 @@ io.on('connection', (socket) => {
       games: gamesList
     });
   });
+
+  // Send global chat history to newly connected socket
+  try {
+    if (globalChatHistory.length > 0) {
+      socket.emit('globalChatHistory', { history: globalChatHistory });
+    }
+  } catch (err) {
+    console.error('Failed to send global chat history to', socket.id, err);
+  }
+
+  // Allow client to request the global chat history (useful when returning to main menu)
+  socket.on('requestGlobalChatHistory', () => {
+    try {
+      socket.emit('globalChatHistory', { history: globalChatHistory });
+    } catch (err) {
+      console.error('Failed to send global chat history to', socket.id, err);
+    }
+  });
   
   // Lobby event handlers
   socket.on('createGame', async (data) => {
@@ -1131,7 +1158,8 @@ io.on('connection', (socket) => {
       gamePlayers: {}, // In-game player tanks
       gameProjectiles: [],
       gameObstacles: [],
-      playersReadyToRestart: new Set()
+      playersReadyToRestart: new Set(),
+      chatHistory: [] // per-lobby chat history
     };
     
     lobbies[gameCode].players[socket.id] = {
@@ -1152,6 +1180,11 @@ io.on('connection', (socket) => {
       players: lobbies[gameCode].players,
       gameMode: lobbies[gameCode].gameMode
     });
+
+    // Send lobby chat history (empty for new lobby)
+    try {
+      socket.emit('lobbyChatHistory', { history: lobbies[gameCode].chatHistory || [] });
+    } catch (err) { console.error('Failed to send lobby chat history on createGame', err); }
     
     // Broadcast game browser status update to all connected clients
     broadcastGameBrowserStatus();
@@ -1201,6 +1234,12 @@ io.on('connection', (socket) => {
       players: lobbies[gameCode].players,
       gameMode: lobbies[gameCode].gameMode || 'ai_solo'
     });
+
+    // Send recent lobby chat history to the joining socket
+    try {
+      const history = lobbies[gameCode].chatHistory || [];
+      socket.emit('lobbyChatHistory', { history });
+    } catch (err) { console.error('Failed to send lobby chat history on joinGame', err); }
     
     // Notify other players in game
     socket.to(gameCode).emit('playerJoinedGame', {
@@ -1303,6 +1342,12 @@ io.on('connection', (socket) => {
       players: lobbies[gameCode].players,
       gameMode: lobbies[gameCode].gameMode || 'ai_solo'
     });
+
+    // Send recent lobby chat history to the rejoining socket
+    try {
+      const history = lobbies[gameCode].chatHistory || [];
+      socket.emit('lobbyChatHistory', { history });
+    } catch (err) { console.error('Failed to send lobby chat history on rejoinLobby', err); }
     
     // Notify ALL players in game (including the rejoining player)
     // This ensures everyone has the correct host status
@@ -1612,6 +1657,110 @@ io.on('connection', (socket) => {
         });
       }
     });
+  });
+
+  // Lobby chat: broadcast messages to all players in the same lobby
+  socket.on('lobbyChatMessage', (data) => {
+    try {
+      const message = String((data && data.message) || '').trim().slice(0, 500);
+      const gameCode = socket.gameCode;
+      if (!message || !gameCode || !lobbies[gameCode]) return;
+
+      const lobby = lobbies[gameCode];
+      const player = lobby.players[socket.id];
+      if (!player) return;
+
+      // Update last activity timestamp
+      lobby.lastActivity = Date.now();
+
+      // Save to lobby chat history
+      try {
+        const entry = { id: genMessageId(), playerName: player.username || 'Player', message, timestamp: Date.now(), playerId: player.playerId || socket.id };
+        lobby.chatHistory = lobby.chatHistory || [];
+        lobby.chatHistory.push(entry);
+        if (lobby.chatHistory.length > 200) lobby.chatHistory.shift();
+      } catch (err) { console.error('Failed to save lobby chat history', err); }
+
+      io.to(gameCode).emit('lobbyChatMessage', {
+        playerName: player.username || 'Player',
+        message: message,
+        timestamp: Date.now(),
+        playerId: player.playerId || socket.id
+      });
+    } catch (err) {
+      console.error('Error handling lobbyChatMessage:', err);
+    }
+  });
+
+  // Global chat: broadcast messages to everyone (menu-level)
+  socket.on('globalChatMessage', (data) => {
+    try {
+      const message = String((data && data.message) || '').trim().slice(0, 500);
+      if (!message) return;
+
+      // Use provided playerName when available, otherwise fall back to persistent ID or socket id
+      const playerName = (data && data.playerName) ? String(data.playerName).slice(0, 50) : (socket.persistentPlayerId || socket.id);
+
+      // Broadcast to all connected clients
+      const entry = { id: genMessageId(), playerName, message, timestamp: Date.now(), playerId: data && data.playerId ? data.playerId : (socket.persistentPlayerId || socket.id) };
+      // Save to global history
+      try {
+        globalChatHistory.push(entry);
+        if (globalChatHistory.length > GLOBAL_CHAT_HISTORY_LIMIT) globalChatHistory.shift();
+      } catch (err) { console.error('Failed to save global chat history', err); }
+
+      // Emit only to sockets that are NOT currently inside a lobby (no socket.gameCode)
+      try {
+        const socketsMap = io.sockets.sockets; // Map of socketId -> Socket
+        for (const [sid, s] of socketsMap) {
+          if (!s.gameCode) {
+            s.emit('globalChatMessage', entry);
+          }
+        }
+      } catch (err) {
+        // Fallback to broadcast if iteration fails
+        io.emit('globalChatMessage', entry);
+      }
+    } catch (err) {
+      console.error('Error handling globalChatMessage:', err);
+    }
+  });
+
+  // Delete chat message (global or lobby) - anyone may request deletion
+  socket.on('deleteChatMessage', (data) => {
+    try {
+      if (!data || !data.id || !data.scope) return;
+      const id = String(data.id);
+      const scope = data.scope; // 'global' or 'lobby'
+
+      if (scope === 'global') {
+        // remove from global history
+        const idx = globalChatHistory.findIndex(m => m.id === id);
+        if (idx !== -1) {
+          globalChatHistory.splice(idx, 1);
+        }
+        // notify menu clients (not in lobbies)
+        try {
+          const socketsMap = io.sockets.sockets;
+          for (const [sid, s] of socketsMap) {
+            if (!s.gameCode) s.emit('chatMessageDeleted', { id, scope: 'global' });
+          }
+        } catch (err) {
+          io.emit('chatMessageDeleted', { id, scope: 'global' });
+        }
+      } else if (scope === 'lobby') {
+        const gameCode = data.gameCode || socket.gameCode;
+        if (!gameCode || !lobbies[gameCode]) return;
+        const lobby = lobbies[gameCode];
+        lobby.chatHistory = lobby.chatHistory || [];
+        const idx = lobby.chatHistory.findIndex(m => m.id === id);
+        if (idx !== -1) lobby.chatHistory.splice(idx, 1);
+        // notify lobby members
+        io.to(gameCode).emit('chatMessageDeleted', { id, scope: 'lobby', gameCode });
+      }
+    } catch (err) {
+      console.error('Error handling deleteChatMessage:', err);
+    }
   });
 
   // Game initialization - validate player is from a valid lobby

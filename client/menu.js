@@ -280,6 +280,8 @@ window.addEventListener('DOMContentLoaded', () => {
       // Register our persistent playerId with the server for ownership checks
       socket.emit('registerPlayer', { playerId });
       socket.emit('requestGameBrowserStatus');
+      // enable global chat by default when on menu
+      if (!currentGameCode) enableGlobalChat();
     });
   }
 });
@@ -306,6 +308,116 @@ const errorMessage = document.getElementById('errorMessage');
 const statusMessage = document.getElementById('statusMessage');
 const gameModeSelect = document.getElementById('gameMode');
 const aiSettings = document.getElementById('aiSettings');
+
+// Chat elements
+const chatInput = document.getElementById('chatInput');
+const chatSendBtn = document.getElementById('chatSendBtn');
+const chatMessages = document.getElementById('chatMessages');
+const lobbyChatHint = document.getElementById('lobbyChatHint');
+
+function appendChatMessage({ id=null, playerName, message, timestamp, self=false }) {
+  if (!chatMessages) return;
+  const el = document.createElement('div');
+  el.style.marginBottom = '6px';
+  if (id) el.setAttribute('data-msg-id', id);
+
+  const left = document.createElement('span');
+  left.style.color = '#b2dfdb';
+  left.style.fontWeight = '600';
+  left.textContent = playerName || 'Anon';
+
+  const colon = document.createTextNode(': ');
+
+  const msg = document.createElement('span');
+  msg.style.color = '#e0f7fa';
+  msg.innerHTML = escapeHtml(message || '');
+
+  const right = document.createElement('div');
+  right.style.cssText = 'float:right; display:flex; gap:8px; align-items:center;';
+
+  const time = document.createElement('small');
+  time.style.color = '#90a4ae';
+  time.textContent = new Date(timestamp || Date.now()).toLocaleTimeString();
+
+  // Delete by double-click with confirmation (disable right-click)
+  right.appendChild(time);
+
+  el.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    if (!id) return;
+    const ok = confirm('Delete this message?');
+    if (!ok) return;
+    const scope = currentGameCode ? 'lobby' : 'global';
+    const payload = { id, scope };
+    if (scope === 'lobby') payload.gameCode = currentGameCode;
+    socket.emit('deleteChatMessage', payload);
+  });
+
+  // Prevent right-click context menu on messages (no right-click delete)
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
+
+  el.appendChild(left);
+  el.appendChild(colon);
+  el.appendChild(msg);
+  el.appendChild(right);
+
+  if (self) el.style.opacity = '0.9';
+  chatMessages.appendChild(el);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function enableLobbyChat(code) {
+  if (chatInput) chatInput.disabled = false;
+  if (chatSendBtn) chatSendBtn.disabled = false;
+  if (lobbyChatHint) lobbyChatHint.textContent = `Chatting in: ${code}`;
+  const title = document.getElementById('chatTitle');
+  if (title) title.textContent = `Lobby Chat (${code})`;
+  // focus input for convenience
+  if (chatMessages) chatMessages.style.height = '160px';
+  if (chatInput) chatInput.focus();
+}
+
+function disableLobbyChat() {
+  if (chatInput) {
+    chatInput.value = '';
+    chatInput.disabled = true;
+  }
+  if (chatSendBtn) chatSendBtn.disabled = true;
+  if (lobbyChatHint) lobbyChatHint.textContent = 'Join a lobby to chat with players';
+  if (chatMessages) chatMessages.innerHTML = '';
+  const title = document.getElementById('chatTitle');
+  if (title) title.textContent = 'Main Chat Board';
+}
+
+function enableGlobalChat() {
+  if (chatInput) chatInput.disabled = false;
+  if (chatSendBtn) chatSendBtn.disabled = false;
+  if (lobbyChatHint) lobbyChatHint.textContent = 'Global Chat (menu)';
+  const title = document.getElementById('chatTitle');
+  if (title) title.textContent = 'Main Chat Board';
+  if (chatMessages) chatMessages.style.height = '320px';
+  if (chatInput) chatInput.focus();
+}
+
+function disableGlobalChat() {
+  if (chatInput) {
+    chatInput.value = '';
+    chatInput.disabled = true;
+  }
+  if (chatSendBtn) chatSendBtn.disabled = true;
+  if (lobbyChatHint) lobbyChatHint.textContent = 'Join a lobby to chat with players';
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // Username modal elements
 const usernameModal = document.getElementById('usernameModal');
@@ -617,6 +729,7 @@ startGameBtn.addEventListener('click', () => {
 leaveLobbyBtn.addEventListener('click', () => {
   if (currentGameCode) {
     socket.emit('leaveGame', { gameCode: currentGameCode });
+    disableLobbyChat();
     resetMenu();
   }
 });
@@ -669,6 +782,8 @@ socket.on('gameCreated', (data) => {
   updateGameModeDisplay(initialGameMode);
   
   showStatus(`Game created! Share code: ${currentGameCode}`);
+  // Enable lobby chat for this game
+  enableLobbyChat(currentGameCode);
 });
 
 socket.on('gameJoined', (data) => {
@@ -698,6 +813,8 @@ socket.on('gameJoined', (data) => {
     playerWaiting.classList.remove('hidden');
     showStatus('Successfully joined game!');
   }
+  // Enable lobby chat for this game
+  enableLobbyChat(currentGameCode);
 });
 
 socket.on('playerJoinedGame', (data) => {
@@ -798,10 +915,24 @@ function resetMenu() {
   currentGameCode = null;
   isHost = false;
   playersInGame = {};
-  
+  disableLobbyChat();
+
   menuView.classList.remove('hidden');
   waitingRoom.classList.add('hidden');
-  gameCodeInput.value = '';
+  // Clear any game code inputs or displays safely
+  try {
+    if (typeof gameCodeInput !== 'undefined' && gameCodeInput) {
+      gameCodeInput.value = '';
+    } else if (gameCodeDisplay) {
+      gameCodeDisplay.textContent = '-';
+    }
+  } catch (e) {
+    console.warn('Failed to clear game code input/display', e);
+  }
+  // Ensure main menu global chat is active again
+  try { enableGlobalChat(); } catch (e) { /* ignore */ }
+  // Request the current global chat history so the menu shows messages immediately
+  try { socket && socket.emit && socket.emit('requestGlobalChatHistory'); } catch (e) { /* ignore */ }
 }
 
 function updatePlayersList() {
@@ -968,4 +1099,78 @@ colorButtons.forEach(btn => {
     
     console.log('Tank color updated:', selectedColor || 'default');
   });
+});
+
+// Chat send handlers
+function sendChat() {
+  if (!chatInput) return;
+  const msg = chatInput.value.trim();
+  if (!msg) return;
+  if (!currentGameCode) {
+    // Send to global channel when not in a lobby
+    socket.emit('globalChatMessage', { message: msg, playerName: username, playerId: playerId });
+    // Wait for server echo to render the message (avoid duplicates)
+    chatInput.value = '';
+    return;
+  }
+  // Emit to server - server will broadcast to the lobby room
+  socket.emit('lobbyChatMessage', { message: msg });
+  // Wait for server echo to render the message (avoid duplicates)
+  chatInput.value = '';
+}
+
+if (chatSendBtn) chatSendBtn.addEventListener('click', sendChat);
+if (chatInput) chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendChat(); });
+
+// Receive lobby chat messages
+socket.on('lobbyChatMessage', (data) => {
+  try {
+    if (!data) return;
+    appendChatMessage({ id: data.id || null, playerName: data.playerName || 'Anon', message: data.message || '', timestamp: data.timestamp || Date.now() });
+  } catch (e) { console.error('Failed to render chat message', e); }
+});
+
+// Receive global chat messages
+socket.on('globalChatMessage', (data) => {
+  try {
+    // Ignore global messages while inside a lobby
+    if (currentGameCode) return;
+    if (!data) return;
+    appendChatMessage({ id: data.id || null, playerName: data.playerName || 'Anon', message: data.message || '', timestamp: data.timestamp || Date.now() });
+  } catch (e) { console.error('Failed to render global chat message', e); }
+});
+
+// Receive global chat history
+socket.on('globalChatHistory', (data) => {
+  try {
+    // Don't render global history if we are currently inside a lobby
+    if (currentGameCode) return;
+    if (!data || !Array.isArray(data.history)) return;
+    if (chatMessages) chatMessages.innerHTML = '';
+    data.history.forEach(msg => {
+      appendChatMessage({ id: msg.id || null, playerName: msg.playerName || 'Anon', message: msg.message || '', timestamp: msg.timestamp || Date.now() });
+    });
+  } catch (e) { console.error('Failed to render global chat history', e); }
+});
+
+// Receive lobby chat history
+socket.on('lobbyChatHistory', (data) => {
+  try {
+    if (!data || !Array.isArray(data.history)) return;
+    if (chatMessages) chatMessages.innerHTML = '';
+    data.history.forEach(msg => {
+      appendChatMessage({ id: msg.id || null, playerName: msg.playerName || 'Anon', message: msg.message || '', timestamp: msg.timestamp || Date.now() });
+    });
+  } catch (e) { console.error('Failed to render lobby chat history', e); }
+});
+
+// Handle message deletion notifications
+socket.on('chatMessageDeleted', (data) => {
+  try {
+    if (!data || !data.id) return;
+    const id = data.id;
+    // find and remove any element with matching data-msg-id
+    const el = chatMessages && chatMessages.querySelector(`[data-msg-id="${id}"]`);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  } catch (e) { console.error('Failed to apply chat deletion', e); }
 });
