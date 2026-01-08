@@ -54,6 +54,32 @@ try {
   const cancelUsernameBtn = document.getElementById('cancelUsernameBtn');
   const usernameModalError = document.getElementById('usernameModalError');
 
+  // Global error handler for lobby page
+  function showGlobalError(msg) {
+    console.error('Global UI error:', msg);
+    let b = document.getElementById('globalErrorBanner');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'globalErrorBanner';
+      b.className = 'global-error-banner';
+      document.body.appendChild(b);
+    }
+    b.textContent = typeof msg === 'string' ? msg : 'An unexpected error occurred';
+    b.style.display = 'block';
+    try { document.getElementById('lobbyMenu') && document.getElementById('lobbyMenu').classList.remove('hidden'); } catch(e){}
+  }
+
+  window.addEventListener('error', (e) => {
+    const msg = (e && e.error && e.error.stack) ? e.error.stack : (e && e.message ? e.message : 'Unhandled error');
+    showGlobalError(msg);
+  });
+
+  window.addEventListener('unhandledrejection', (e) => {
+    const reason = e && e.reason;
+    const msg = reason && reason.stack ? reason.stack : (reason ? String(reason) : 'Unhandled Promise rejection');
+    showGlobalError(msg);
+  });
+
   // Language toggle initialization (lobby)
   (function initLangToggle() {
     const btn = document.getElementById('langToggleBtn');

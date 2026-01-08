@@ -266,6 +266,34 @@ const cancelUsernameBtn = document.getElementById('cancelUsernameBtn');
 const changeNameBtn = document.getElementById('changeNameBtn');
 const usernameModalError = document.getElementById('usernameModalError');
 
+// Global error handler: show banner and attempt to restore UI
+function showGlobalError(msg) {
+  console.error('Global UI error:', msg);
+  let b = document.getElementById('globalErrorBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'globalErrorBanner';
+    b.className = 'global-error-banner';
+    document.body.appendChild(b);
+  }
+  b.textContent = typeof msg === 'string' ? msg : 'An unexpected error occurred';
+  b.style.display = 'block';
+  // try to reveal main UI so user can still interact
+  try { menuView && menuView.classList.remove('hidden'); } catch(e){}
+  try { waitingRoom && waitingRoom.classList.add('hidden'); } catch(e){}
+}
+
+window.addEventListener('error', (e) => {
+  const msg = (e && e.error && e.error.stack) ? e.error.stack : (e && e.message ? e.message : 'Unhandled error');
+  showGlobalError(msg);
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  const reason = e && e.reason;
+  const msg = reason && reason.stack ? reason.stack : (reason ? String(reason) : 'Unhandled Promise rejection');
+  showGlobalError(msg);
+});
+
 function showUsernameModalError(message) {
   if (!usernameModalError) {
     showError(message);

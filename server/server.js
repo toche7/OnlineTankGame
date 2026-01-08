@@ -31,8 +31,21 @@ const MAX_NAME_LENGTH = 15;
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: false,
+  cookie: {
+    // In production the app should be served over HTTPS so we mark secure=true
+    secure: process.env.NODE_ENV === 'production',
+    // For OAuth redirects from Google, cookies need SameSite=None (and Secure)
+    // in production; during local development use 'lax' for compatibility.
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days
+  }
 }));
+
+// If behind a proxy (e.g. hosting platforms) enable trust proxy so secure cookies work
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 app.use(passport.initialize());
 app.use(passport.session());
 
