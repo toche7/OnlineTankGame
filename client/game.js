@@ -16,7 +16,7 @@ let gameState = {
   playerId: null,
   players: {},
   projectiles: [],
-  gameWidth: 800,
+  gameWidth: 1067,
   gameHeight: 600,
   explosions: [],
   obstacles: [],
@@ -61,6 +61,9 @@ let touchControls = {
 // Canvas scaling for responsive design
 let canvasScale = 1;
 let canvasOffset = { x: 0, y: 0 };
+// Rendering scale and offset to preserve 1:1 object ratios
+let renderScale = 1;
+let renderOffset = { x: 0, y: 0 };
 
 // Get persistent player ID
 let persistentPlayerId = localStorage.getItem('tankGamePlayerId');
@@ -84,29 +87,31 @@ function updateCanvasScale() {
   const availableWidth = Math.max(320, window.innerWidth - sidebarWidth - horizontalPadding);
   const availableHeight = Math.max(240, window.innerHeight - 40);
 
-  // Maintain 4:3 aspect ratio (width:height)
+  // Maintain 16:9 aspect ratio (width:height)
   let cssWidth, cssHeight;
 
   if (isMobile && window.innerWidth >= window.innerHeight) {
-    // Mobile landscape: fill screen
-    cssWidth = window.innerWidth;
-    cssHeight = window.innerHeight;
+    // Mobile landscape: fit a 16:9 area within the screen
+    const availW = window.innerWidth;
+    const availH = window.innerHeight;
+    cssWidth = Math.min(availW, Math.round(availH * 16 / 9));
+    cssHeight = Math.round(cssWidth * 9 / 16);
   } else if (!isMobile) {
-    // Desktop: fit within available area, up to 1200x900
-    cssWidth = Math.min(1200, availableWidth);
-    cssHeight = Math.min(900, Math.round(cssWidth * 3 / 4));
+    // Desktop: fit within available area, up to 1280x720 or 1600x900 depending on width
+    cssWidth = Math.min(1280, availableWidth);
+    cssHeight = Math.min(720, Math.round(cssWidth * 9 / 16));
     // If height doesn't fit, reduce to fit availableHeight
     if (cssHeight > availableHeight) {
-      cssHeight = Math.min(900, availableHeight);
-      cssWidth = Math.round(cssHeight * 4 / 3);
+      cssHeight = Math.min(720, availableHeight);
+      cssWidth = Math.round(cssHeight * 16 / 9);
     }
   } else {
-    // Mobile portrait or small screens: use up to 800x600 but fit viewport
-    cssWidth = Math.min(800, availableWidth);
-    cssHeight = Math.round(cssWidth * 3 / 4);
+    // Mobile portrait or small screens: use up to 854x480 (16:9) but fit viewport
+    cssWidth = Math.min(854, availableWidth);
+    cssHeight = Math.round(cssWidth * 9 / 16);
     if (cssHeight > availableHeight) {
       cssHeight = availableHeight;
-      cssWidth = Math.round(cssHeight * 4 / 3);
+      cssWidth = Math.round(cssHeight * 16 / 9);
     }
   }
 
@@ -117,15 +122,50 @@ function updateCanvasScale() {
   // Set backing store size for high-DPI displays
   canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
   canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
+
+  // Expose a scale variable to CSS so overlays can scale with canvas
+  const gameScale = cssWidth / 800; // base game world is 800px wide
+  document.documentElement.style.setProperty('--game-scale', String(gameScale));
+
+  // Move `#ui` into `#gameContainer` as overlay for tablet landscape where appropriate
+  try {
+    const ui = document.getElementById('ui');
+    const gameContainer = document.getElementById('gameContainer');
+    const container = document.getElementById('container');
+    // Treat any landscape on touch/mobile devices like tablet landscape
+    const tabletLandscape = (window.innerWidth > window.innerHeight) && (isMobile || (window.innerWidth >= 768 && window.innerWidth <= 1366));
+    if (ui && gameContainer) {
+      if (tabletLandscape) {
+        if (ui.parentNode !== gameContainer) {
+          // move into gameContainer and add overlay class
+          ui.parentNode && ui.parentNode.removeChild(ui);
+          gameContainer.appendChild(ui);
+          ui.classList.add('overlay-ui');
+        }
+      } else {
+        // ensure ui is back in main container
+        if (ui.parentNode !== container) {
+          ui.parentNode && ui.parentNode.removeChild(ui);
+          container.insertBefore(ui, container.firstChild);
+          ui.classList.remove('overlay-ui');
+        }
+      }
+    }
+  } catch (e) {
+    console.error('UI overlay move error', e);
+  }
 }
 
 // Convert screen coordinates to canvas coordinates
 function screenToCanvas(x, y) {
   const rect = canvas.getBoundingClientRect();
-  return {
-    x: (x - rect.left) * (800 / rect.width),
-    y: (y - rect.top) * (600 / rect.height)
-  };
+  // Convert client coords to canvas backing pixels
+  const canvasPixelX = (x - rect.left) * (canvas.width / rect.width);
+  const canvasPixelY = (y - rect.top) * (canvas.height / rect.height);
+  // Convert canvas pixels to world coordinates using render offset/scale
+  const worldX = (canvasPixelX - renderOffset.x) / renderScale;
+  const worldY = (canvasPixelY - renderOffset.y) / renderScale;
+  return { x: worldX, y: worldY };
 }
 
 // Initialize mobile controls
@@ -1138,12 +1178,19 @@ function gameLoop() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Scale to fit screen (stretch game world to fill canvas) if needed
-  const needsScale = canvas.width !== 800 || canvas.height !== 600;
-  if (needsScale) {
-    ctx.save();
-    ctx.scale(canvas.width / 800, canvas.height / 600);
-  }
+  // Compute uniform scale to preserve 1:1 object ratios.
+  // Use COVER mode (Math.max) so the battlefield fills the entire canvas (may crop edges).
+  const worldW = gameState.gameWidth || 800;
+  const worldH = gameState.gameHeight || 600;
+  renderScale = Math.max(canvas.width / worldW, canvas.height / worldH);
+  // When using cover, offsets can be negative (world is larger than canvas in one dimension)
+  renderOffset.x = (canvas.width - worldW * renderScale) / 2;
+  renderOffset.y = (canvas.height - worldH * renderScale) / 2;
+
+  // Save and apply transform for world drawing (working in world coordinates)
+  ctx.save();
+  ctx.translate(renderOffset.x, renderOffset.y);
+  ctx.scale(renderScale, renderScale);
 
   // Draw grid for reference
   drawGrid();
@@ -1178,15 +1225,13 @@ function gameLoop() {
     drawProjectile(projectile);
   });
 
-  // Draw all explosions
+  // Draw all explosions (in world coordinates)
   gameState.explosions.forEach(explosion => {
     explosion.draw(ctx);
   });
-  
-  // Restore scale if applied
-  if (needsScale) {
-    ctx.restore();
-  }
+
+  // Restore transform back to canvas pixel coordinates
+  ctx.restore();
   
   // Draw countdown overlay (after restore, in screen coordinates)
   if (gameState.countdownActive && gameState.countdownValue > 0) {
@@ -1718,7 +1763,12 @@ function updateLeaderboard() {
   scoreList.innerHTML = players.map((player, index) => {
     const isMe = player.id === gameState.playerId ? ' (You)' : '';
     const topClass = index < 3 ? ` top-${index + 1}` : '';
-    return `<li class="${topClass}">${index + 1}. ${player.score} pts${isMe}</li>`;
+    const playerName = player.username || 'Unknown';
+    return `<li class="${topClass}">
+      <span class="rank">${index + 1}.</span>
+      <span class="player-name">${playerName}${isMe}</span>
+      <span class="player-score">${player.score}</span>
+    </li>`;
   }).join('');
 }
 

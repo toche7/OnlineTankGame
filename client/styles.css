@@ -4,6 +4,10 @@
   box-sizing: border-box;
 }
 
+:root {
+  --game-scale: 1;
+}
+
 body {
   font-family: Arial, sans-serif;
   background-color: #222;
@@ -41,72 +45,198 @@ body {
   cursor: crosshair;
   width: 100%;
   height: auto;
-  max-width: 1200px;
-  max-height: 900px;
-  aspect-ratio: 4 / 3;
+  max-width: 1280px;
+  max-height: 720px;
+  aspect-ratio: 16 / 9;
 }
 
 #ui {
   color: #fff;
-  padding: 20px;
-  background-color: #333;
-  border: 2px solid #fff;
-  border-radius: 8px;
+  padding: 24px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 2px solid #0f3460;
+  border-radius: 12px;
   min-width: 150px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
 }
 
 #playerInfo h2 {
-  margin-bottom: 15px;
-  color: #00ff00;
+  margin-bottom: 20px;
+  color: #00ff88;
+  font-size: 22px;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+  letter-spacing: 1px;
+}
+
+#teamDisplay {
+  text-align: center;
+  padding: 10px 16px !important;
+  margin: 16px 0 !important;
+  border-radius: 8px !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  border: 2px solid !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
 #playerInfo p {
-  margin: 10px 0;
-  font-size: 16px;
+  margin: 12px 0;
+  font-size: 15px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  border-left: 3px solid #0f3460;
+  transition: all 0.2s ease;
+}
+
+#playerInfo p:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-left-color: #00ff88;
+  transform: translateX(2px);
 }
 
 #playerCount, #health {
-  color: #00ff00;
+  color: #00ff88;
   font-weight: bold;
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+  font-size: 17px;
+}
+
+#lives {
+  color: #ff6b6b;
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(255, 107, 107, 0.4);
+  font-size: 17px;
 }
 
 #score, #kills {
-  color: #ffff00;
+  color: #ffd93d;
   font-weight: bold;
+  text-shadow: 0 0 8px rgba(255, 217, 61, 0.4);
+  font-size: 17px;
+}
+
+#ammo {
+  color: #6bcfff;
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(107, 207, 255, 0.4);
+  font-size: 17px;
+}
+
+#gameTime {
+  color: #c084fc;
+  font-weight: bold;
+  text-shadow: 0 0 8px rgba(192, 132, 252, 0.4);
+  font-size: 17px;
 }
 
 #leaderboard {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #555;
+  margin-top: 24px;
+  padding: 16px;
+  background: rgba(0, 255, 136, 0.05);
+  border: 2px solid rgba(0, 255, 136, 0.2);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.1);
 }
 
 #leaderboard h3 {
-  color: #00ff00;
-  margin-bottom: 10px;
-  font-size: 14px;
+  color: #00ff88;
+  margin-bottom: 12px;
+  font-size: 16px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
 }
 
 #scoreList {
   list-style: none;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 #scoreList li {
-  padding: 5px 0;
-  color: #ccc;
+  padding: 8px 12px;
+  margin: 6px 0;
+  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+#scoreList li .rank {
+  flex-shrink: 0;
+  min-width: 20px;
+  font-weight: bold;
+}
+
+#scoreList li .player-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#scoreList li .player-score {
+  flex-shrink: 0;
+  font-weight: bold;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+#scoreList li:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(3px);
 }
 
 #scoreList li.top-1 {
-  color: #ffff00;
+  color: #ffd93d;
+  background: rgba(255, 217, 61, 0.1);
+  border-left-color: #ffd93d;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(255, 217, 61, 0.2);
+}
+
+#scoreList li.top-1::before {
+  content: "🥇 ";
+  margin-right: 4px;
 }
 
 #scoreList li.top-2 {
-  color: #c0c0c0;
+  color: #e8e8e8;
+  background: rgba(192, 192, 192, 0.1);
+  border-left-color: #c0c0c0;
+  font-weight: bold;
+  box-shadow: 0 2px 6px rgba(192, 192, 192, 0.2);
+}
+
+#scoreList li.top-2::before {
+  content: "🥈 ";
+  margin-right: 4px;
 }
 
 #scoreList li.top-3 {
-  color: #cd7f32;
+  color: #f4a460;
+  background: rgba(205, 127, 50, 0.1);
+  border-left-color: #cd7f32;
+  font-weight: bold;
+  box-shadow: 0 2px 6px rgba(205, 127, 50, 0.2);
+}
+
+#scoreList li.top-3::before {
+  content: "🥉 ";
+  margin-right: 4px;
 }
 
 /* Finish Screen Styles */
@@ -380,8 +510,8 @@ body {
   #gameCanvas {
     width: 100%;
     height: auto;
-    max-width: 1200px;
-    max-height: 900px;
+    max-width: 1280px;
+    max-height: 720px;
   }
 
   #chatContainer {
@@ -513,6 +643,113 @@ body {
 
 .rotate-overlay.hidden {
   display: none;
+}
+
+/* Mobile and tablet landscape: compact horizontal overlay over canvas */
+@media (orientation: landscape) and (max-width: 1366px) {
+  /* Keep container row-oriented but let gameContainer dominate */
+  #container {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 6px;
+  }
+
+  /* Place the UI as an overlay over the canvas */
+  .overlay-ui, #ui.overlay-ui {
+    position: absolute;
+    z-index: 50;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20,20,20,0.6);
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 6px 10px;
+    border-radius: 8px;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    pointer-events: none; /* allow touches to pass through except interactive children */
+    width: auto;
+    max-width: calc(100% - 40px);
+  }
+
+  /* Make stat items compact and horizontal */
+  #playerInfo {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    color: #fff;
+    padding: 0;
+    margin: 0;
+    pointer-events: none;
+  }
+
+  #playerInfo h2 { display: none; }
+
+  #playerInfo p {
+    margin: 0;
+    font-size: calc(13px * var(--game-scale));
+    color: #ddd;
+    white-space: nowrap;
+    pointer-events: none;
+    font-size: 0;
+    height: auto;
+    padding: 0;
+    background: none;
+    border: none;
+  }
+
+  /* Show icons instead of text on mobile/tablet */
+  #playerInfo p span {
+    color: #00ff00;
+    font-weight: 700;
+    font-size: calc(16px * var(--game-scale));
+    margin: 0 3px;
+  }
+
+  /* Use ID-based selectors for reliability */
+  /* Time icon */
+  #playerInfo p:has(#gameTime)::before { content: "⏱ "; font-size: calc(16px * var(--game-scale)); }
+  #playerInfo p:has(#gameTime) span { color: #c084fc !important; }
+
+  /* Players icon */
+  #playerInfo p:has(#playerCount)::before { content: "👥 "; font-size: calc(16px * var(--game-scale)); }
+  #playerInfo p:has(#playerCount) span { color: #00ff88 !important; }
+
+  /* Health icon */
+  #playerInfo p:has(#health)::before { content: "❤️ "; font-size: calc(16px * var(--game-scale)); }
+  #playerInfo p:has(#health) span { color: #ff6b6b !important; }
+
+  /* Lives icon */
+  #playerInfo p:has(#lives)::before { content: "💣 "; font-size: calc(16px * var(--game-scale)); }
+  #playerInfo p:has(#lives) span { color: #ff6b6b !important; }
+
+  /* Ammo icon (if displayed) */
+  #ammoDisplay::before { content: "🔫 "; font-size: calc(16px * var(--game-scale)); }
+  #ammoDisplay span { color: #6bcfff !important; }
+
+  /* Score icon */
+  #playerInfo p:has(#score)::before { content: "⭐ "; font-size: calc(16px * var(--game-scale)); }
+  #playerInfo p:has(#score) span { color: #ffd93d !important; }
+
+  /* Kills icon */
+  #playerInfo p:has(#kills)::before { content: "💥 "; font-size: calc(16px * var(--game-scale)); }
+  #playerInfo p:has(#kills) span { color: #ffd93d !important; }
+
+  /* Hide large leaderboard to save vertical space */
+  #leaderboard { display: none; }
+
+  /* Adjust chat container so it doesn't overlap overlay */
+  #chatContainer {
+    bottom: 10px;
+    left: 8px;
+    width: 320px;
+  }
+
+  /* Ensure mobile controls remain usable: move joysticks slightly inward */
+  .joystick-container { left: 12px; bottom: 80px; }
+  .aim-joystick-container { right: 12px; bottom: 80px; }
 }
 
 /* Ensure joysticks match size in landscape on phones/tablets */
