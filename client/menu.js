@@ -917,9 +917,32 @@ socket.on('gameError', (data) => {
   showError(data.message);
 });
 
-socket.on('gameAlreadyStarted', () => {
-  showError('This game has already started. You cannot join.');
-  resetMenu();
+socket.on('gameAlreadyStarted', (data) => {
+  const gameCode = data.gameCode;
+  if (confirm('This game has already started. Would you like to watch as a spectator?')) {
+    // Join as spectator
+    socket.emit('joinGame', {
+      gameCode: gameCode,
+      playerId: playerId,
+      username: username,
+      asSpectator: true
+    });
+  } else {
+    showError('Game has already started.');
+    resetMenu();
+  }
+});
+
+socket.on('joinedAsSpectator', (data) => {
+  currentGameCode = data.gameCode;
+  // Navigate to game page with spectator flag
+  const params = new URLSearchParams({
+    code: data.gameCode,
+    playerId: playerId,
+    username: username,
+    spectator: 'true'
+  });
+  window.location.href = `game.html?${params.toString()}`;
 });
 
 socket.on('lobbyTimedOut', (data) => {
@@ -1070,11 +1093,9 @@ socket.on('gameBrowserStatus', (data) => {
       const gameItem = document.createElement('div');
       gameItem.className = `game-item ${game.state}`;
       
-      // Only make lobbies (waiting state) clickable
-      if (game.state === 'waiting') {
-        gameItem.classList.add('clickable');
-        gameItem.style.cursor = 'pointer';
-      }
+      // Make all games clickable
+      gameItem.classList.add('clickable');
+      gameItem.style.cursor = 'pointer';
       
       gameItem.innerHTML = `
         <div class="game-item-info">
@@ -1082,18 +1103,30 @@ socket.on('gameBrowserStatus', (data) => {
           <div class="game-item-status">${game.playerCount} player${game.playerCount !== 1 ? 's' : ''}</div>
         </div>
         <div class="game-item-badge ${game.state}">
-          ${game.state === 'playing' ? '🎮 Playing' : '⏳ Waiting'}
+          ${game.state === 'playing' ? '🎮 Playing <span style="margin-left: 8px; font-size: 0.9em;">👁️ Watch</span>' : '⏳ Waiting'}
         </div>
       `;
       
-      // Add click handler for lobbies (waiting state)
-      if (game.state === 'waiting') {
-        gameItem.addEventListener('click', () => {
-          const gameCode = game.code;
+      // Add click handler for all games
+      gameItem.addEventListener('click', () => {
+        const gameCode = game.code;
+        if (game.state === 'playing') {
+          // Ask to join as spectator
+          if (confirm('This game is in progress. Would you like to watch as a spectator?')) {
+            socket.emit('joinGame', { 
+              gameCode, 
+              playerId, 
+              username, 
+              asSpectator: true 
+            });
+            showStatus(`Joining game ${gameCode} as spectator...`);
+          }
+        } else {
+          // Join as player for waiting lobbies
           socket.emit('joinGame', { gameCode, playerId, username, tankColor });
           showStatus(`Joining game ${gameCode}...`);
-        });
-      }
+        }
+      });
       
       activeGamesList.appendChild(gameItem);
     });

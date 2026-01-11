@@ -1220,19 +1220,47 @@ io.on('connection', (socket) => {
     const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
     const username = data?.username || genGuestName();
     const tankColor = data?.tankColor || null;
+    const asSpectator = data?.asSpectator || false;
     
     if (!lobbies[gameCode]) {
       socket.emit('lobbyError', { message: 'Game not found!' });
       return;
     }
     
-    if (lobbies[gameCode].state === 'playing') {
-      socket.emit('gameAlreadyStarted');
+    if (lobbies[gameCode].state === 'playing' && !asSpectator) {
+      socket.emit('gameAlreadyStarted', { gameCode: gameCode });
       return;
     }
     
-    if (Object.keys(lobbies[gameCode].players).length >= MAX_PLAYERS) {
+    if (Object.keys(lobbies[gameCode].players).length >= MAX_PLAYERS && !asSpectator) {
       socket.emit('lobbyError', { message: 'Game is full!' });
+      return;
+    }
+    
+    // If joining as spectator, don't add to players list but allow viewing
+    if (asSpectator) {
+      // Initialize spectators array if it doesn't exist
+      if (!lobbies[gameCode].spectators) {
+        lobbies[gameCode].spectators = [];
+      }
+      
+      lobbies[gameCode].spectators.push({
+        id: socket.id,
+        playerId: playerId,
+        username: username
+      });
+      
+      socket.join(gameCode);
+      socket.gameCode = gameCode;
+      socket.isSpectator = true;
+      
+      socket.emit('joinedAsSpectator', {
+        gameCode: gameCode,
+        gameMode: lobbies[gameCode].gameMode || 'ai_solo',
+        gameState: lobbies[gameCode].state
+      });
+      
+      console.log(`Player ${socket.id} (${username}) joined game ${gameCode} as spectator`);
       return;
     }
     
@@ -1803,11 +1831,14 @@ io.on('connection', (socket) => {
     const gameCode = data.gameCode;
     const persistentPlayerId = data.playerId || socket.id;
     const username = data.username || genGuestName();
+    const isSpectator = data.spectator || false;
     
-    // Register/update player in database
-    await db.getPlayer(persistentPlayerId, username);
+    // Register/update player in database (skip for spectators)
+    if (!isSpectator) {
+      await db.getPlayer(persistentPlayerId, username);
+    }
     
-    console.log(`InitGame called by ${socket.id} for game ${gameCode}`);
+    console.log(`InitGame called by ${socket.id} for game ${gameCode}, spectator: ${isSpectator}`);
     console.log(`Lobby exists: ${!!lobbies[gameCode]}, State: ${lobbies[gameCode]?.state}`);
     
     if (!gameCode || !lobbies[gameCode]) {
@@ -1826,6 +1857,12 @@ io.on('connection', (socket) => {
     socket.gameCode = gameCode;
     socket.join(gameCode);
     
+    // Mark as spectator if applicable
+    if (isSpectator) {
+      socket.isSpectator = true;
+      console.log(`Socket ${socket.id} marked as spectator for game ${gameCode}`);
+    }
+    
     // Track game socket IDs - initialize if not exists
     if (!lobbies[gameCode].gameSocketIds) {
       lobbies[gameCode].gameSocketIds = new Set();
@@ -1833,15 +1870,15 @@ io.on('connection', (socket) => {
     lobbies[gameCode].gameSocketIds.add(socket.id);
     
     // Track if this player was the original host from the lobby
-    if (data.wasHost && !lobbies[gameCode].hostGameSocketId) {
+    if (data.wasHost && !lobbies[gameCode].hostGameSocketId && !isSpectator) {
       lobbies[gameCode].hostGameSocketId = socket.id;
       lobbies[gameCode].hostGamePlayerId = persistentPlayerId; // Store persistent player ID
       console.log(`Host game socket ID set to ${socket.id}, playerId: ${persistentPlayerId} (was lobby host)`);
     }
     
-    // Create new tank for player if not exists
+    // Create new tank for player if not exists (skip for spectators)
     const lobby = lobbies[gameCode];
-    if (!lobby.gamePlayers[socket.id]) {
+    if (!lobby.gamePlayers[socket.id] && !isSpectator) {
       // Check if this player already has a tank with a different socket ID (reconnection after refresh)
       let existingTank = null;
       let oldSocketId = null;
@@ -1893,9 +1930,9 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Send initial game state to new player
+    // Send initial game state to new player (or spectator)
     socket.emit('init', {
-      playerId: socket.id,
+      playerId: isSpectator ? null : socket.id,
       players: sanitizePlayers(lobby.gamePlayers),
       gameWidth: GAME_WIDTH,
       gameHeight: GAME_HEIGHT,
@@ -1904,22 +1941,25 @@ io.on('connection', (socket) => {
       powerups: lobby.gamePowerups || [],
       gameStartTime: lobby.gameStartTime,
       gameDuration: GAME_DURATION,
-      melody: lobbies[gameCode].melody || 'battle'
+      melody: lobbies[gameCode].melody || 'battle',
+      isSpectator: isSpectator
     });
     
-    console.log(`Player ${socket.id} initialized for game ${socket.gameCode}. Total players: ${Object.keys(lobby.gamePlayers).length}`);
+    console.log(`${isSpectator ? 'Spectator' : 'Player'} ${socket.id} initialized for game ${socket.gameCode}. Total players: ${Object.keys(lobby.gamePlayers).length}`);
 
-    // Notify other players of new player
-    socket.to(socket.gameCode).emit('playerJoined', {
-      playerId: socket.id,
-      tank: sanitizeTank(lobby.gamePlayers[socket.id])
-    });
+    // Notify other players of new player (skip for spectators)
+    if (!isSpectator) {
+      socket.to(socket.gameCode).emit('playerJoined', {
+        playerId: socket.id,
+        tank: sanitizeTank(lobby.gamePlayers[socket.id])
+      });
+    }
   });
 
   // Handle player movement
   socket.on('move', (data) => {
     const gameCode = socket.gameCode;
-    if (!gameCode || !lobbies[gameCode]) return;
+    if (!gameCode || !lobbies[gameCode] || socket.isSpectator) return;
     
     const lobby = lobbies[gameCode];
     if (lobby.gamePlayers[socket.id]) {
@@ -1950,7 +1990,7 @@ io.on('connection', (socket) => {
   // Handle turret rotation (aiming)
   socket.on('rotate', (data) => {
     const gameCode = socket.gameCode;
-    if (!gameCode || !lobbies[gameCode]) return;
+    if (!gameCode || !lobbies[gameCode] || socket.isSpectator) return;
     
     const lobby = lobbies[gameCode];
     if (lobby.gamePlayers[socket.id]) {
@@ -1961,7 +2001,7 @@ io.on('connection', (socket) => {
   // Handle shooting
   socket.on('shoot', (data) => {
     const gameCode = socket.gameCode;
-    if (!gameCode || !lobbies[gameCode]) return;
+    if (!gameCode || !lobbies[gameCode] || socket.isSpectator) return;
     
     const lobby = lobbies[gameCode];
     if (lobby.gamePlayers[socket.id]) {
@@ -2235,7 +2275,15 @@ io.on('connection', (socket) => {
     console.log('Player disconnected:', socket.id);
     
     const gameCode = socket.gameCode;
-    console.log(`Disconnect - gameCode: ${gameCode}, has lobby: ${!!(gameCode && lobbies[gameCode])}, lobby state: ${lobbies[gameCode]?.state}`);
+    const wasSpectator = socket.isSpectator;
+    console.log(`Disconnect - gameCode: ${gameCode}, has lobby: ${!!(gameCode && lobbies[gameCode])}, lobby state: ${lobbies[gameCode]?.state}, isSpectator: ${wasSpectator}`);
+    
+    // Handle spectator cleanup
+    if (wasSpectator && gameCode && lobbies[gameCode] && lobbies[gameCode].spectators) {
+      lobbies[gameCode].spectators = lobbies[gameCode].spectators.filter(s => s.id !== socket.id);
+      console.log(`Spectator ${socket.id} removed from game ${gameCode}`);
+      return;
+    }
     
     // Handle lobby cleanup
     if (gameCode && lobbies[gameCode]) {

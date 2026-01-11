@@ -6,6 +6,7 @@ const socket = io();
 const urlParams = new URLSearchParams(window.location.search);
 const gameCode = urlParams.get('code');
 const wasHost = urlParams.get('wasHost') === 'true';
+const isSpectator = urlParams.get('spectator') === 'true';
 
 // Redirect to menu if no game code
 if (!gameCode) {
@@ -361,7 +362,7 @@ function initFireButton() {
   if (!fireButton) return;
 
   function handleFire() {
-    if (gameState.countdownActive || gameState.gameFinished) return;
+    if (gameState.countdownActive || gameState.gameFinished || isSpectator) return;
     playShootSound();
     socket.emit('shoot', {});
   }
@@ -517,22 +518,39 @@ function getJoystickMovement() {
 socket.on('connect', async () => {
   console.log('Connected to server, initializing game with code:', gameCode, 'wasHost:', wasHost);
   
-  // Fetch username from server
-  try {
-    const response = await fetch(`/api/player/${persistentPlayerId}`);
-    const data = await response.json();
-    if (data.success && data.player) {
-      username = data.player.username;
+  // Show spectator mode indicator if spectating
+  if (isSpectator) {
+    document.getElementById('spectatorMode').style.display = 'block';
+    document.getElementById('healthDisplay').style.display = 'none';
+    document.getElementById('livesDisplay').style.display = 'none';
+    document.getElementById('scoreDisplay').style.display = 'none';
+    document.getElementById('killsDisplay').style.display = 'none';
+    // Hide mobile controls for spectators
+    const mobileControls = document.getElementById('mobileControls');
+    if (mobileControls) {
+      mobileControls.style.display = 'none';
     }
-  } catch (err) {
-    console.error('Error fetching username:', err);
+  }
+  
+  // Fetch username from server (if not spectator)
+  if (!isSpectator) {
+    try {
+      const response = await fetch(`/api/player/${persistentPlayerId}`);
+      const data = await response.json();
+      if (data.success && data.player) {
+        username = data.player.username;
+      }
+    } catch (err) {
+      console.error('Error fetching username:', err);
+    }
   }
   
   socket.emit('initGame', { 
     gameCode: gameCode, 
     wasHost: wasHost,
     playerId: persistentPlayerId,
-    username: username
+    username: username,
+    spectator: isSpectator
   });
 });
 
@@ -722,8 +740,8 @@ socket.on('init', (data) => {
   gameState.gameDuration = data.gameDuration;
   selectedMelody = data.melody || 'battle';
   
-  // Get my team info
-  const myTank = gameState.players[gameState.playerId];
+  // Get my team info (skip for spectators)
+  const myTank = gameState.playerId ? gameState.players[gameState.playerId] : null;
   if (myTank && myTank.team) {
     gameState.myTeam = myTank.team;
     gameState.gameMode = myTank.team === 'team_a' || myTank.team === 'team_b' ? 'team_pvp' : 
@@ -749,7 +767,7 @@ socket.on('init', (data) => {
     }
   }
   
-  console.log('Connected with ID:', data.playerId, 'Team:', gameState.myTeam);
+  console.log('Connected with ID:', data.playerId, 'Spectator:', data.isSpectator, 'Team:', gameState.myTeam);
   console.log('Players:', Object.keys(gameState.players).length);
   console.log('Melody:', selectedMelody);
   updatePlayerCount();
@@ -850,11 +868,16 @@ socket.on('gameEnded', (data) => {
   gameState.gameFinished = true;
   stopBackgroundMusic();
   
-  if (data.returnToMenu) {
-    // Show results briefly then return to menu with game code
+  if (data.returnToMenu || isSpectator) {
+    // Show results briefly then return to menu
     showFinishScreen(data);
     setTimeout(() => {
-      window.location.href = `/menu.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
+      // Spectators go directly to main menu, players can rejoin lobby
+      if (isSpectator) {
+        window.location.href = '/menu.html';
+      } else {
+        window.location.href = `/menu.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
+      }
     }, 5000); // Show results for 5 seconds
   } else {
     showFinishScreen(data);
@@ -953,7 +976,7 @@ document.addEventListener('keyup', (e) => {
 
 // Mouse movement for aiming (desktop)
 canvas.addEventListener('mousemove', (e) => {
-  if (isMobile) return; // Skip mouse events on mobile
+  if (isMobile || isSpectator) return; // Skip mouse events on mobile or spectator
 
   const canvasCoords = screenToCanvas(e.clientX, e.clientY);
 
@@ -968,7 +991,7 @@ canvas.addEventListener('mousemove', (e) => {
 
 // Touch movement for aiming (mobile)
 canvas.addEventListener('touchmove', (e) => {
-  if (!isMobile) return;
+  if (!isMobile || isSpectator) return;
   e.preventDefault();
 
   if (e.touches.length > 0) {
@@ -987,7 +1010,7 @@ canvas.addEventListener('touchmove', (e) => {
 
 // Canvas click to shoot (desktop)
 canvas.addEventListener('click', () => {
-  if (isMobile || gameState.countdownActive || gameState.gameFinished) return;
+  if (isMobile || gameState.countdownActive || gameState.gameFinished || isSpectator) return;
   playShootSound();
   socket.emit('shoot', {});
 });
@@ -1102,7 +1125,7 @@ function gameLoop() {
 
   // Handle movement input
   const myTank = gameState.players[gameState.playerId];
-  if (myTank) {
+  if (myTank && !isSpectator) {
     let velocityX = 0;
     let velocityY = 0;
 
@@ -1761,7 +1784,7 @@ function updateLeaderboard() {
     .slice(0, 5);
 
   scoreList.innerHTML = players.map((player, index) => {
-    const isMe = player.id === gameState.playerId ? ' (You)' : '';
+    const isMe = (gameState.playerId && player.id === gameState.playerId) ? ' (You)' : '';
     const topClass = index < 3 ? ` top-${index + 1}` : '';
     const playerName = player.username || 'Unknown';
     return `<li class="${topClass}">
@@ -1780,8 +1803,8 @@ function showFinishScreen(data) {
   const finishStatus = document.getElementById('finishStatus');
   const finishStats = document.getElementById('finishStats');
 
-  // Determine if player won or lost
-  const myTank = gameState.players[gameState.playerId];
+  // Determine if player won or lost (spectators have no outcome)
+  const myTank = gameState.playerId ? gameState.players[gameState.playerId] : null;
   let isPlayerWinner = data.winner === gameState.playerId;
   
   // Check for team-based wins (co-op mode and PvP mode)
@@ -1793,18 +1816,23 @@ function showFinishScreen(data) {
   }
   
   // Set title based on result
-  if (isPlayerWinner) {
+  if (isSpectator) {
+    finishTitle.textContent = '👁️ GAME ENDED';
+  } else if (isPlayerWinner) {
     finishTitle.textContent = myTank && myTank.team ? '🎉 YOUR TEAM WINS! 🎉' : '🎉 YOU WIN! 🎉';
   } else {
     finishTitle.textContent = 'GAME OVER';
   }
-  finishTitle.style.color = isPlayerWinner ? '#ffff00' : '#ff6600';
+  finishTitle.style.color = isSpectator ? '#90caf9' : (isPlayerWinner ? '#ffff00' : '#ff6600');
   
   // Set reason
   finishReason.textContent = data.reason;
   
   // Set status
-  if (isPlayerWinner) {
+  if (isSpectator) {
+    finishStatus.textContent = 'Thanks for watching!';
+    finishStatus.style.color = '#90caf9';
+  } else if (isPlayerWinner) {
     finishStatus.textContent = myTank && myTank.team ? '✨ Victory! Your team dominated! ✨' : '✨ Congratulations, Champion! ✨';
     finishStatus.style.color = '#ffff00';
   } else {
@@ -1813,18 +1841,22 @@ function showFinishScreen(data) {
   }
 
   // Display stats
-  if (myTank) {
+  if (myTank && !isSpectator) {
     finishStats.innerHTML = `
       <p>Your Score: <span>${myTank.score}</span></p>
       <p>Your Kills: <span>${myTank.kills}</span></p>
       <p>Your Health: <span>${Math.max(0, Math.round(myTank.health))}</span></p>
       <p>Total Players: <span>${data.survivors || Object.keys(gameState.players).length}</span></p>
     `;
+  } else if (isSpectator) {
+    finishStats.innerHTML = `
+      <p>Total Players: <span>${Object.keys(gameState.players).length}</span></p>
+    `;
   }
 
-  // Hide restart button if returning to menu
+  // Hide restart button if returning to menu or if spectator
   const restartBtn = document.getElementById('restartBtn');
-  if (data.returnToMenu && restartBtn) {
+  if ((data.returnToMenu || isSpectator) && restartBtn) {
     restartBtn.style.display = 'none';
   }
 
@@ -1878,13 +1910,22 @@ document.getElementById('statsLink').addEventListener('click', (e) => {
 });
 
 document.getElementById('restartBtn').addEventListener('click', () => {
+  if (isSpectator) {
+    alert('Spectators cannot restart the game.');
+    return;
+  }
   socket.emit('requestRestart');
   document.getElementById('restartBtn').textContent = 'Waiting for other players...';
   document.getElementById('restartBtn').disabled = true;
 });
 
 document.getElementById('closeBtn').addEventListener('click', () => {
-  window.location.href = `/menu.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
+  // Spectators go directly to main menu, players can rejoin lobby
+  if (isSpectator) {
+    window.location.href = '/menu.html';
+  } else {
+    window.location.href = `/menu.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
+  }
 });
 
 // Initialize mobile controls
