@@ -35,9 +35,351 @@ const keys = {};
 let mouseAngle = 0;
 let selectedMelody = 'battle'; // Default melody
 
+// Mobile controls state
+let isMobile = false;
+let touchControls = {
+  joystickActive: false,
+  joystickCenter: { x: 0, y: 0 },
+  joystickPosition: { x: 0, y: 0 },
+  joystickBase: null,
+  joystickHandle: null,
+  fireButton: null,
+  // Aim joystick (right side)
+  aimJoystickActive: false,
+  aimJoystickCenter: { x: 0, y: 0 },
+  aimJoystickPosition: { x: 0, y: 0 },
+  aimJoystickBase: null,
+  aimJoystickHandle: null,
+  aimLastAngle: 0,
+  aimLastFire: 0,
+  autoFireEnabled: false,
+  lastTouchAngle: 0
+};
+
+// Canvas scaling for responsive design
+let canvasScale = 1;
+let canvasOffset = { x: 0, y: 0 };
+
 // Get persistent player ID
 let persistentPlayerId = localStorage.getItem('tankGamePlayerId');
 let username = null; // Will be fetched from server
+
+// Detect if device is mobile/touch-enabled
+function detectMobile() {
+  return ('ontouchstart' in window) ||
+         (navigator.maxTouchPoints > 0) ||
+         (navigator.msMaxTouchPoints > 0) ||
+         (window.innerWidth <= 768);
+}
+
+// Update canvas scaling for responsive design
+function updateCanvasScale() {
+  if (isMobile && window.innerWidth >= window.innerHeight) {
+    // Landscape mobile: fill screen
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  } else {
+    // Desktop or portrait: fixed size
+    canvas.width = 800;
+    canvas.height = 600;
+  }
+}
+
+// Convert screen coordinates to canvas coordinates
+function screenToCanvas(x, y) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (x - rect.left) * (800 / rect.width),
+    y: (y - rect.top) * (600 / rect.height)
+  };
+}
+
+// Initialize mobile controls
+function initMobileControls() {
+  isMobile = detectMobile();
+  console.log('Mobile device detected:', isMobile);
+
+  if (isMobile) {
+    // Show mobile controls
+    const mobileControls = document.getElementById('mobileControls');
+    if (mobileControls) {
+      mobileControls.style.display = 'block';
+    }
+
+    // Get control elements
+    touchControls.joystickBase = document.getElementById('joystickBase');
+    touchControls.joystickHandle = document.getElementById('joystickHandle');
+    touchControls.aimJoystickBase = document.getElementById('aimJoystickBase');
+    touchControls.aimJoystickHandle = document.getElementById('aimJoystickHandle');
+    touchControls.fireButton = document.getElementById('fireButton');
+
+    // Initialize joystick
+    initJoystick();
+
+    // Initialize aim joystick and fire behavior
+    initAimJoystick();
+    // Initialize fire button (no-op if missing)
+    initFireButton();
+
+    // Initialize auto-fire toggle
+    initAutoFireToggle();
+
+    // Update canvas scale initially
+    updateCanvasScale();
+
+    // Update canvas scale on resize
+    window.addEventListener('resize', updateCanvasScale);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(updateCanvasScale, 100);
+    });
+    // Enforce landscape mode: try lock and show overlay if portrait
+    enforceLandscapeMode();
+  }
+}
+
+// Check and enforce landscape mode on mobile: try Screen Orientation API lock, otherwise show overlay
+function enforceLandscapeMode() {
+  const overlay = document.getElementById('rotateOverlay');
+  const mobileControls = document.getElementById('mobileControls');
+
+  function isLandscape() {
+    return window.innerWidth >= window.innerHeight;
+  }
+
+  function showOverlay() {
+    if (overlay) overlay.classList.remove('hidden');
+    if (mobileControls) mobileControls.style.display = 'none';
+  }
+
+  function hideOverlay() {
+    if (overlay) overlay.classList.add('hidden');
+    if (mobileControls) mobileControls.style.display = 'block';
+    updateCanvasScale();
+  }
+
+  // Try to lock orientation where supported (mostly Android/Chrome)
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(() => {
+      // Lock may fail (iOS Safari or insecure context); fall back to overlay
+    });
+  }
+
+  // Initial check
+  if (!isLandscape()) showOverlay(); else hideOverlay();
+
+  // Listen for changes
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => { if (!isLandscape()) showOverlay(); else hideOverlay(); }, 120);
+  });
+  window.addEventListener('resize', () => { if (!isLandscape()) showOverlay(); else hideOverlay(); });
+}
+
+// Initialize virtual joystick
+function initJoystick() {
+  const joystickBase = touchControls.joystickBase;
+  const joystickHandle = touchControls.joystickHandle;
+
+  if (!joystickBase || !joystickHandle) return;
+
+  let isDragging = false;
+  let startPos = { x: 0, y: 0 };
+
+  function handleStart(e) {
+    e.preventDefault();
+    isDragging = true;
+    touchControls.joystickActive = true;
+
+    const rect = joystickBase.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    touchControls.joystickCenter = { x: centerX, y: centerY };
+    touchControls.joystickPosition = { x: centerX, y: centerY };
+
+    updateJoystickPosition(e);
+  }
+
+  function handleMove(e) {
+    if (!isDragging) return;
+    e.preventDefault();
+    updateJoystickPosition(e);
+  }
+
+  function handleEnd(e) {
+    if (!isDragging) return;
+    e.preventDefault();
+    isDragging = false;
+    touchControls.joystickActive = false;
+
+    // Reset joystick handle position
+    joystickHandle.style.transform = 'translate(-50%, -50%)';
+    touchControls.joystickPosition = { ...touchControls.joystickCenter };
+  }
+
+  function updateJoystickPosition(e) {
+    const touch = e.touches ? e.touches[0] : e;
+    const rect = joystickBase.getBoundingClientRect();
+    const maxDistance = rect.width / 2 - 20; // Leave some margin
+
+    let deltaX = touch.clientX - touchControls.joystickCenter.x;
+    let deltaY = touch.clientY - touchControls.joystickCenter.y;
+
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    if (distance > maxDistance) {
+      deltaX = (deltaX / distance) * maxDistance;
+      deltaY = (deltaY / distance) * maxDistance;
+    }
+
+    touchControls.joystickPosition.x = touchControls.joystickCenter.x + deltaX;
+    touchControls.joystickPosition.y = touchControls.joystickCenter.y + deltaY;
+
+    // Update visual handle position
+    const handleX = (deltaX / maxDistance) * 30; // 30px max movement
+    const handleY = (deltaY / maxDistance) * 30;
+    joystickHandle.style.transform = `translate(calc(-50% + ${handleX}px), calc(-50% + ${handleY}px))`;
+  }
+
+  // Touch events
+  joystickBase.addEventListener('touchstart', handleStart, { passive: false });
+  joystickBase.addEventListener('touchmove', handleMove, { passive: false });
+  joystickBase.addEventListener('touchend', handleEnd, { passive: false });
+  joystickBase.addEventListener('touchcancel', handleEnd, { passive: false });
+
+  // Mouse events for testing on desktop
+  joystickBase.addEventListener('mousedown', handleStart);
+  document.addEventListener('mousemove', handleMove);
+  document.addEventListener('mouseup', handleEnd);
+}
+
+// Initialize fire button
+function initFireButton() {
+  const fireButton = touchControls.fireButton;
+  if (!fireButton) return;
+
+  function handleFire() {
+    if (gameState.countdownActive || gameState.gameFinished) return;
+    playShootSound();
+    socket.emit('shoot', {});
+  }
+
+  fireButton.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    handleFire();
+  });
+
+  fireButton.addEventListener('mousedown', handleFire);
+}
+
+// Initialize auto-fire toggle
+function initAutoFireToggle() {
+  const checkbox = document.getElementById('autoFireCheckbox');
+  if (checkbox) {
+    checkbox.addEventListener('change', (e) => {
+      touchControls.autoFireEnabled = e.target.checked;
+    });
+  }
+}
+
+// Initialize right-side aim joystick (controls turret direction and firing)
+function initAimJoystick() {
+  const base = touchControls.aimJoystickBase;
+  const handle = touchControls.aimJoystickHandle;
+  if (!base || !handle) return;
+
+  let isAiming = false;
+
+  function aimStart(e) {
+    e.preventDefault();
+    isAiming = true;
+    touchControls.aimJoystickActive = true;
+
+    const rect = base.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    touchControls.aimJoystickCenter = { x: cx, y: cy };
+    touchControls.aimJoystickPosition = { x: cx, y: cy };
+
+    updateAim(e);
+  }
+
+  function aimMove(e) {
+    if (!isAiming) return;
+    e.preventDefault();
+    updateAim(e);
+  }
+
+  function aimEnd(e) {
+    if (!isAiming) return;
+    e.preventDefault();
+    isAiming = false;
+    touchControls.aimJoystickActive = false;
+    handle.style.transform = 'translate(-50%, -50%)';
+    touchControls.aimJoystickPosition = { ...touchControls.aimJoystickCenter };
+  }
+
+  function updateAim(e) {
+    const touch = e.touches ? e.touches[0] : e;
+    const rect = base.getBoundingClientRect();
+    const maxDistance = rect.width / 2 - 12;
+
+    let dx = touch.clientX - touchControls.aimJoystickCenter.x;
+    let dy = touch.clientY - touchControls.aimJoystickCenter.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > maxDistance) {
+      dx = (dx / dist) * maxDistance;
+      dy = (dy / dist) * maxDistance;
+    }
+
+    touchControls.aimJoystickPosition.x = touchControls.aimJoystickCenter.x + dx;
+    touchControls.aimJoystickPosition.y = touchControls.aimJoystickCenter.y + dy;
+
+    const handleX = (dx / maxDistance) * 30;
+    const handleY = (dy / maxDistance) * 30;
+    handle.style.transform = `translate(calc(-50% + ${handleX}px), calc(-50% + ${handleY}px))`;
+
+    // Calculate angle and emit rotate
+    const angle = Math.atan2(dy, dx);
+    touchControls.aimLastAngle = angle;
+    socket.emit('rotate', { rotation: angle });
+
+    // If pushed outward enough, fire
+    if (dist > 18) {
+      const now = Date.now();
+      const fireInterval = touchControls.autoFireEnabled ? 200 : 300; // faster if auto-fire
+      if (!touchControls.aimLastFire || now - touchControls.aimLastFire > fireInterval) {
+        playShootSound();
+        socket.emit('shoot', {});
+        touchControls.aimLastFire = now;
+      }
+    }
+  }
+
+  base.addEventListener('touchstart', aimStart, { passive: false });
+  base.addEventListener('touchmove', aimMove, { passive: false });
+  base.addEventListener('touchend', aimEnd, { passive: false });
+  base.addEventListener('touchcancel', aimEnd, { passive: false });
+
+  // mouse events for desktop testing
+  base.addEventListener('mousedown', aimStart);
+  document.addEventListener('mousemove', aimMove);
+  document.addEventListener('mouseup', aimEnd);
+}
+
+// Get movement from joystick
+function getJoystickMovement() {
+  if (!touchControls.joystickActive) return { x: 0, y: 0 };
+
+  const deltaX = touchControls.joystickPosition.x - touchControls.joystickCenter.x;
+  const deltaY = touchControls.joystickPosition.y - touchControls.joystickCenter.y;
+
+  const maxDistance = 50; // Maximum joystick movement in pixels
+  const normalizedX = Math.max(-1, Math.min(1, deltaX / maxDistance));
+  const normalizedY = Math.max(-1, Math.min(1, deltaY / maxDistance));
+
+  return { x: normalizedX, y: normalizedY };
+}
 
 // Initialize game when connected
 socket.on('connect', async () => {
@@ -477,26 +819,64 @@ document.addEventListener('keyup', (e) => {
   keys[e.key] = false;
 });
 
-// Mouse movement for aiming
+// Mouse movement for aiming (desktop)
 canvas.addEventListener('mousemove', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
+  if (isMobile) return; // Skip mouse events on mobile
+
+  const canvasCoords = screenToCanvas(e.clientX, e.clientY);
 
   if (gameState.players[gameState.playerId]) {
     const tank = gameState.players[gameState.playerId];
-    const dx = mouseX - tank.x;
-    const dy = mouseY - tank.y;
+    const dx = canvasCoords.x - tank.x;
+    const dy = canvasCoords.y - tank.y;
     mouseAngle = Math.atan2(dy, dx);
     socket.emit('rotate', { rotation: mouseAngle });
   }
 });
 
-// Canvas click to shoot
+// Touch movement for aiming (mobile)
+canvas.addEventListener('touchmove', (e) => {
+  if (!isMobile) return;
+  e.preventDefault();
+
+  if (e.touches.length > 0) {
+    const touch = e.touches[0];
+    const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
+
+    if (gameState.players[gameState.playerId]) {
+      const tank = gameState.players[gameState.playerId];
+      const dx = canvasCoords.x - tank.x;
+      const dy = canvasCoords.y - tank.y;
+      touchControls.lastTouchAngle = Math.atan2(dy, dx);
+      socket.emit('rotate', { rotation: touchControls.lastTouchAngle });
+    }
+  }
+});
+
+// Canvas click to shoot (desktop)
 canvas.addEventListener('click', () => {
-  if (gameState.countdownActive || gameState.gameFinished) return;
+  if (isMobile || gameState.countdownActive || gameState.gameFinished) return;
   playShootSound();
   socket.emit('shoot', {});
+});
+
+// Touch start for aiming initialization (mobile)
+canvas.addEventListener('touchstart', (e) => {
+  if (!isMobile) return;
+  e.preventDefault();
+
+  if (e.touches.length > 0) {
+    const touch = e.touches[0];
+    const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
+
+    if (gameState.players[gameState.playerId]) {
+      const tank = gameState.players[gameState.playerId];
+      const dx = canvasCoords.x - tank.x;
+      const dy = canvasCoords.y - tank.y;
+      touchControls.lastTouchAngle = Math.atan2(dy, dx);
+      socket.emit('rotate', { rotation: touchControls.lastTouchAngle });
+    }
+  }
 });
 
 // Explosion sound effect using Web Audio API
@@ -596,10 +976,18 @@ function gameLoop() {
 
     // Only allow movement if player is alive (not spectating) and countdown is finished
     if (myTank.isAlive && !gameState.countdownActive) {
-      if (keys['ArrowUp'] || keys['w'] || keys['W']) velocityY -= 5;
-      if (keys['ArrowDown'] || keys['s'] || keys['S']) velocityY += 5;
-      if (keys['ArrowLeft'] || keys['a'] || keys['A']) velocityX -= 5;
-      if (keys['ArrowRight'] || keys['d'] || keys['D']) velocityX += 5;
+      // Keyboard movement (desktop)
+      if (!isMobile) {
+        if (keys['ArrowUp'] || keys['w'] || keys['W']) velocityY -= 5;
+        if (keys['ArrowDown'] || keys['s'] || keys['S']) velocityY += 5;
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) velocityX -= 5;
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) velocityX += 5;
+      } else {
+        // Joystick movement (mobile)
+        const joystickMovement = getJoystickMovement();
+        velocityX = joystickMovement.x * 5;
+        velocityY = joystickMovement.y * 5;
+      }
 
       if (velocityX !== 0 || velocityY !== 0) {
         socket.emit('move', { velocityX, velocityY });
@@ -611,6 +999,17 @@ function gameLoop() {
       if (!window._loggedNotAlive) {
         console.log('Cannot move - tank isAlive:', myTank.isAlive);
         window._loggedNotAlive = true;
+      }
+    }
+
+    // Handle auto-fire for mobile
+    if (isMobile && touchControls.autoFireEnabled && myTank.isAlive && !gameState.countdownActive && !gameState.gameFinished) {
+      // Auto-fire at a reasonable rate (every 200ms)
+      const now = Date.now();
+      if (!window.lastAutoFire || now - window.lastAutoFire > 200) {
+        playShootSound();
+        socket.emit('shoot', {});
+        window.lastAutoFire = now;
       }
     }
 
@@ -646,6 +1045,13 @@ function gameLoop() {
   // Clear canvas
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Scale to fit screen (stretch game world to fill canvas) if needed
+  const needsScale = canvas.width !== 800 || canvas.height !== 600;
+  if (needsScale) {
+    ctx.save();
+    ctx.scale(canvas.width / 800, canvas.height / 600);
+  }
 
   // Draw grid for reference
   drawGrid();
@@ -685,7 +1091,12 @@ function gameLoop() {
     explosion.draw(ctx);
   });
   
-  // Draw countdown overlay
+  // Restore scale if applied
+  if (needsScale) {
+    ctx.restore();
+  }
+  
+  // Draw countdown overlay (after restore, in screen coordinates)
   if (gameState.countdownActive && gameState.countdownValue > 0) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1302,6 +1713,9 @@ document.getElementById('restartBtn').addEventListener('click', () => {
 document.getElementById('closeBtn').addEventListener('click', () => {
   window.location.href = `/menu.html?rejoin=${gameCode}&oldSocketId=${socket.id}`;
 });
+
+// Initialize mobile controls
+initMobileControls();
 
 // Start game loop
 gameLoop();

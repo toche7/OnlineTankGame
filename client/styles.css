@@ -197,3 +197,324 @@ body {
   box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
   transform: scale(1.05);
 }
+
+/* Mobile Controls */
+.mobile-controls {
+  display: none;
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  pointer-events: none;
+}
+
+.mobile-controls > * {
+  pointer-events: auto;
+}
+
+/* Virtual Joystick */
+.joystick-container {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  width: 120px;
+  height: 120px;
+}
+
+.joystick-base {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  position: relative;
+  touch-action: none;
+}
+
+.joystick-handle {
+  width: 40px;
+  height: 40px;
+  background: #00ff00;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.1s ease;
+}
+
+/* Fire Button */
+.fire-button {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #ff4444, #cc0000);
+  border: 3px solid #fff;
+  border-radius: 50%;
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.fire-button:active {
+  background: linear-gradient(135deg, #cc0000, #990000);
+  transform: scale(0.95);
+}
+
+/* Auto-fire Toggle */
+.auto-fire-toggle {
+  position: absolute;
+  bottom: 150px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid #444;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.auto-fire-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+/* Game Container for responsive canvas */
+#gameContainer {
+  position: relative;
+  display: inline-block;
+}
+
+/* Aim Joystick (right side) */
+.aim-joystick-container {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 120px;
+  height: 120px;
+  pointer-events: none;
+}
+
+.aim-joystick-container > * {
+  pointer-events: auto;
+}
+
+.aim-joystick-base {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  position: relative;
+  touch-action: none;
+}
+
+.aim-joystick-handle {
+  width: 40px;
+  height: 40px;
+  background: #ff6b6b;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.06s linear;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  #container {
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  #ui {
+    order: 1;
+    width: 100%;
+    min-width: unset;
+    padding: 15px;
+  }
+
+  #gameContainer {
+    order: 2;
+    width: 100%;
+  }
+
+  #gameCanvas {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  #chatContainer {
+    width: calc(100% - 20px);
+    left: 10px;
+    right: 10px;
+    bottom: 140px;
+  }
+}
+
+@media (max-width: 768px) {
+  .mobile-controls {
+    display: block;
+  }
+
+  #gameCanvas {
+    cursor: default;
+  }
+
+  #ui {
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  #playerInfo p {
+    font-size: 14px;
+    margin: 8px 0;
+  }
+
+  #leaderboard h3 {
+    font-size: 12px;
+  }
+
+  #chatContainer {
+    bottom: 160px;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 5px;
+  }
+
+  #container {
+    gap: 5px;
+  }
+
+  #ui {
+    padding: 8px;
+  }
+
+  #playerInfo h2 {
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+
+  .joystick-container {
+    width: 100px;
+    height: 100px;
+    bottom: 15px;
+    left: 15px;
+  }
+
+  .joystick-handle {
+    width: 35px;
+    height: 35px;
+  }
+
+  /* Ensure aim joystick matches left joystick in portrait */
+  .aim-joystick-container {
+    width: 100px;
+    height: 100px;
+    bottom: 15px;
+    right: 15px;
+  }
+
+  .aim-joystick-handle {
+    width: 35px;
+    height: 35px;
+  }
+
+  .fire-button {
+    width: 70px;
+    height: 70px;
+    font-size: 10px;
+    bottom: 15px;
+    right: 15px;
+  }
+
+  .auto-fire-toggle {
+    bottom: 135px;
+    right: 15px;
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  #chatContainer {
+    bottom: 140px;
+    left: 5px;
+    right: 5px;
+    width: calc(100% - 10px);
+  }
+}
+
+/* Rotate overlay */
+.rotate-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.92);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  text-align: center;
+  padding: 20px;
+}
+
+.rotate-overlay .rotate-content p {
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 6px 0;
+}
+
+.rotate-overlay .sub {
+  opacity: 0.8;
+  font-size: 14px;
+}
+
+.rotate-overlay.hidden {
+  display: none;
+}
+
+/* Ensure joysticks match size in landscape on phones/tablets */
+@media (orientation: landscape) and (max-width: 1024px) {
+  .joystick-container,
+  .aim-joystick-container {
+    width: 110px;
+    height: 110px;
+    bottom: 15px;
+  }
+
+  .joystick-handle,
+  .aim-joystick-handle {
+    width: 36px;
+    height: 36px;
+  }
+
+  .joystick-container {
+    left: 15px;
+  }
+
+  .aim-joystick-container {
+    right: 15px;
+  }
+}
