@@ -1135,6 +1135,37 @@ function drawTank(tank, isPlayer) {
   const x = tank.x;
   const y = tank.y;
   const rotation = tank.rotation;
+
+  // Aim guidance: show a cone/line around the player's tank when aim joystick is active
+  try {
+    if (isPlayer && touchControls.aimJoystickActive && typeof touchControls.aimLastAngle === 'number') {
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = '#00d2ff';
+      const guideRadius = (typeof TANK_SIZE !== 'undefined' ? TANK_SIZE : 20) * 4;
+      const angle = touchControls.aimLastAngle;
+      const spread = Math.PI / 12; // ~15 degrees cone
+
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, guideRadius, angle - spread, angle + spread);
+      ctx.closePath();
+      ctx.fill();
+
+      // Draw direction line
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#00ffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(angle) * guideRadius, y + Math.sin(angle) * guideRadius);
+      ctx.stroke();
+      ctx.restore();
+    }
+  } catch (e) {
+    // fail-safe: don't block rendering if guidance code errors
+    console.error('Aim guidance error', e);
+  }
   
   // Check if this is an AI tank
   const isAI = tank.isAI || (tank.id && tank.id.startsWith('ai_'));
