@@ -22,8 +22,9 @@ body {
   gap: 20px;
   align-items: flex-start;
   width: 100%;
-  max-width: 1400px;
+  max-width: 1600px;
   padding: 10px 20px;
+  justify-content: center;
 }
 
 /* Desktop layout: UI sidebar + flexible game area */
@@ -32,7 +33,7 @@ body {
 }
 
 #gameContainer {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   display: flex;
   justify-content: center;
   align-items: center;
