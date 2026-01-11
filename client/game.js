@@ -41,6 +41,7 @@ let touchControls = {
   joystickActive: false,
   joystickCenter: { x: 0, y: 0 },
   joystickPosition: { x: 0, y: 0 },
+  joystickTouchId: null,
   joystickBase: null,
   joystickHandle: null,
   fireButton: null,
@@ -48,6 +49,7 @@ let touchControls = {
   aimJoystickActive: false,
   aimJoystickCenter: { x: 0, y: 0 },
   aimJoystickPosition: { x: 0, y: 0 },
+  aimJoystickTouchId: null,
   aimJoystickBase: null,
   aimJoystickHandle: null,
   aimLastAngle: 0,
@@ -74,15 +76,47 @@ function detectMobile() {
 
 // Update canvas scaling for responsive design
 function updateCanvasScale() {
+  const dpr = window.devicePixelRatio || 1;
+
+  // Determine available space (subtract UI sidebar for desktop)
+  const sidebarWidth = (!isMobile) ? 300 : 0;
+  const horizontalPadding = 40; // container padding/gaps
+  const availableWidth = Math.max(320, window.innerWidth - sidebarWidth - horizontalPadding);
+  const availableHeight = Math.max(240, window.innerHeight - 40);
+
+  // Maintain 4:3 aspect ratio (width:height)
+  let cssWidth, cssHeight;
+
   if (isMobile && window.innerWidth >= window.innerHeight) {
-    // Landscape mobile: fill screen
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Mobile landscape: fill screen
+    cssWidth = window.innerWidth;
+    cssHeight = window.innerHeight;
+  } else if (!isMobile) {
+    // Desktop: fit within available area, up to 1200x900
+    cssWidth = Math.min(1200, availableWidth);
+    cssHeight = Math.min(900, Math.round(cssWidth * 3 / 4));
+    // If height doesn't fit, reduce to fit availableHeight
+    if (cssHeight > availableHeight) {
+      cssHeight = Math.min(900, availableHeight);
+      cssWidth = Math.round(cssHeight * 4 / 3);
+    }
   } else {
-    // Desktop or portrait: fixed size
-    canvas.width = 800;
-    canvas.height = 600;
+    // Mobile portrait or small screens: use up to 800x600 but fit viewport
+    cssWidth = Math.min(800, availableWidth);
+    cssHeight = Math.round(cssWidth * 3 / 4);
+    if (cssHeight > availableHeight) {
+      cssHeight = availableHeight;
+      cssWidth = Math.round(cssHeight * 4 / 3);
+    }
   }
+
+  // Apply CSS size for layout
+  canvas.style.width = cssWidth + 'px';
+  canvas.style.height = cssHeight + 'px';
+
+  // Set backing store size for high-DPI displays
+  canvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+  canvas.height = Math.max(1, Math.floor(cssHeight * dpr));
 }
 
 // Convert screen coordinates to canvas coordinates
@@ -196,6 +230,11 @@ function initJoystick() {
     touchControls.joystickCenter = { x: centerX, y: centerY };
     touchControls.joystickPosition = { x: centerX, y: centerY };
 
+    // Store the touch identifier
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      touchControls.joystickTouchId = e.changedTouches[0].identifier;
+    }
+
     updateJoystickPosition(e);
   }
 
@@ -208,16 +247,40 @@ function initJoystick() {
   function handleEnd(e) {
     if (!isDragging) return;
     e.preventDefault();
-    isDragging = false;
-    touchControls.joystickActive = false;
+    // Check if the ended touch is ours
+    let isOurTouch = false;
+    if (e.changedTouches) {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === touchControls.joystickTouchId) {
+          isOurTouch = true;
+          break;
+        }
+      }
+    } else {
+      isOurTouch = true; // for mouse
+    }
+    if (isOurTouch) {
+      isDragging = false;
+      touchControls.joystickActive = false;
+      touchControls.joystickTouchId = null;
 
-    // Reset joystick handle position
-    joystickHandle.style.transform = 'translate(-50%, -50%)';
-    touchControls.joystickPosition = { ...touchControls.joystickCenter };
+      // Reset joystick handle position
+      joystickHandle.style.transform = 'translate(-50%, -50%)';
+      touchControls.joystickPosition = { ...touchControls.joystickCenter };
+    }
   }
 
   function updateJoystickPosition(e) {
-    const touch = e.touches ? e.touches[0] : e;
+    let touch = e;
+    if (e.touches) {
+      // Find the touch with the stored identifier
+      for (let i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].identifier === touchControls.joystickTouchId) {
+          touch = e.touches[i];
+          break;
+        }
+      }
+    }
     const rect = joystickBase.getBoundingClientRect();
     const maxDistance = rect.width / 2 - 20; // Leave some margin
 
@@ -300,6 +363,11 @@ function initAimJoystick() {
     touchControls.aimJoystickCenter = { x: cx, y: cy };
     touchControls.aimJoystickPosition = { x: cx, y: cy };
 
+    // Store the touch identifier
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      touchControls.aimJoystickTouchId = e.changedTouches[0].identifier;
+    }
+
     updateAim(e);
   }
 
@@ -312,14 +380,38 @@ function initAimJoystick() {
   function aimEnd(e) {
     if (!isAiming) return;
     e.preventDefault();
-    isAiming = false;
-    touchControls.aimJoystickActive = false;
-    handle.style.transform = 'translate(-50%, -50%)';
-    touchControls.aimJoystickPosition = { ...touchControls.aimJoystickCenter };
+    // Check if the ended touch is ours
+    let isOurTouch = false;
+    if (e.changedTouches) {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === touchControls.aimJoystickTouchId) {
+          isOurTouch = true;
+          break;
+        }
+      }
+    } else {
+      isOurTouch = true; // for mouse
+    }
+    if (isOurTouch) {
+      isAiming = false;
+      touchControls.aimJoystickActive = false;
+      touchControls.aimJoystickTouchId = null;
+      handle.style.transform = 'translate(-50%, -50%)';
+      touchControls.aimJoystickPosition = { ...touchControls.aimJoystickCenter };
+    }
   }
 
   function updateAim(e) {
-    const touch = e.touches ? e.touches[0] : e;
+    let touch = e;
+    if (e.touches) {
+      // Find the touch with the stored identifier
+      for (let i = 0; i < e.touches.length; i++) {
+        if (e.touches[i].identifier === touchControls.aimJoystickTouchId) {
+          touch = e.touches[i];
+          break;
+        }
+      }
+    }
     const rect = base.getBoundingClientRect();
     const maxDistance = rect.width / 2 - 12;
 
@@ -1747,6 +1839,11 @@ document.getElementById('closeBtn').addEventListener('click', () => {
 
 // Initialize mobile controls
 initMobileControls();
+
+// Always update canvas scale for current platform and listen for resizes
+updateCanvasScale();
+window.addEventListener('resize', updateCanvasScale);
+window.addEventListener('orientationchange', updateCanvasScale);
 
 // Start game loop
 gameLoop();

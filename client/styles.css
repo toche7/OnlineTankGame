@@ -16,6 +16,21 @@ body {
 #container {
   display: flex;
   gap: 20px;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 1400px;
+  padding: 10px 20px;
+}
+
+/* Desktop layout: UI sidebar + flexible game area */
+#ui {
+  flex: 0 0 300px; /* fixed sidebar width */
+}
+
+#gameContainer {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
   align-items: center;
 }
 
@@ -24,6 +39,11 @@ body {
   background-color: #000;
   display: block;
   cursor: crosshair;
+  width: 100%;
+  height: auto;
+  max-width: 1200px;
+  max-height: 900px;
+  aspect-ratio: 4 / 3;
 }
 
 #ui {
@@ -360,8 +380,8 @@ body {
   #gameCanvas {
     width: 100%;
     height: auto;
-    max-width: 100%;
-    max-height: 100%;
+    max-width: 1200px;
+    max-height: 900px;
   }
 
   #chatContainer {
