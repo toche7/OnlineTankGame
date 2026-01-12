@@ -573,7 +573,7 @@ body {
   #chatContainer {
     bottom: 160px;
   }
-}
+
 
 @media (max-width: 480px) {
   body {
@@ -844,3 +844,4 @@ body {
     max-width: calc(100vw - 32px) !important;
     max-height: calc(100vh - 20px) !important;
   }
+}

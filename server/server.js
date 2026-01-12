@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
+const os = require('os');
 const db = require('./database');
 const crypto = require('crypto');
 const passport = require('passport');
@@ -2777,6 +2778,28 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`Platform: Railway`);
   } else {
     console.log(`Local access: http://localhost:${PORT}`);
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const nets = os.networkInterfaces();
+        const addresses = [];
+        for (const name of Object.keys(nets)) {
+          for (const net of nets[name]) {
+            if (net.family === 'IPv4' && !net.internal) {
+              addresses.push(net.address);
+            }
+          }
+        }
+        if (addresses.length > 0) {
+          addresses.forEach(ip => {
+            console.log(`Local network access: http://${ip}:${PORT}`);
+          });
+        } else {
+          console.log('No local network IPs detected');
+        }
+      } catch (err) {
+        console.error('Failed to enumerate network interfaces:', err);
+      }
+    }
   }
 });
 
