@@ -88,6 +88,7 @@ socket.on('leaderboards', (data) => {
   displayLeaderboard('loggedInLeaderboardBody', data.loggedIn || [], 'registered');
   displayLeaderboard('guestLeaderboardBody', data.guest || [], 'guest');
   displayLeaderboard('monthlyLeaderboardBody', data.monthly || [], 'monthly');
+  displayLeaderboard('lastMonthLeaderboardBody', data.lastMonth || [], 'lastMonth');
 });
 
 // Helper function to display a leaderboard
@@ -101,8 +102,10 @@ function displayLeaderboard(tbodyId, players, type) {
       message = 'No registered players yet.';
     } else if (type === 'guest') {
       message = 'No guest players yet.';
-    } else {
-      message = 'No monthly rankings yet. Play some games this month!';
+    } else if (type === 'monthly') {
+      message = 'No rankings yet. Play some games this month!';
+    } else if (type === 'lastMonth') {
+      message = 'No data from last month yet.';
     }
     tbody.innerHTML = `<tr><td colspan="8" class="loading">${message}</td></tr>`;
     return;
@@ -179,6 +182,8 @@ function setupTabs() {
         targetTab = 'guestTab';
       } else if (tabName === 'monthly') {
         targetTab = 'monthlyTab';
+      } else if (tabName === 'lastMonth') {
+        targetTab = 'lastMonthTab';
       }
       if (targetTab) {
         document.getElementById(targetTab).classList.add('active');

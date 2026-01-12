@@ -132,6 +132,15 @@ function getCurrentMonth() {
   return `${year}-${month}`;
 }
 
+// Get last month in YYYY-MM format
+function getLastMonth() {
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const year = lastMonth.getFullYear();
+  const month = String(lastMonth.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
 // Update monthly stats for a player
 async function updateMonthlyStats(playerId, gameRecord) {
   const client = await pool.connect();
@@ -405,10 +414,10 @@ async function getGuestLeaderboard(sortBy = 'wins', limit = 50) {
 }
 
 // Get monthly leaderboard for registered players
-async function getMonthlyLeaderboard(sortBy = 'wins', limit = 50) {
+async function getMonthlyLeaderboard(sortBy = 'wins', limit = 50, month = null) {
   const client = await pool.connect();
   try {
-    const currentMonth = getCurrentMonth();
+    const targetMonth = month || getCurrentMonth();
     const validSorts = {
       'wins': 'ms.wins DESC, ms.kills DESC, ms.total_score DESC',
       'kills': 'ms.kills DESC, ms.wins DESC, ms.total_score DESC',
@@ -435,7 +444,7 @@ async function getMonthlyLeaderboard(sortBy = 'wins', limit = 50) {
       WHERE ms.month = $1 AND p.google_id IS NOT NULL AND ms.games_played > 0
       ORDER BY ${orderBy}
       LIMIT $2
-    `, [currentMonth, limit]);
+    `, [targetMonth, limit]);
     
     return result.rows.map(player => ({
       id: player.id,
@@ -458,6 +467,11 @@ async function getMonthlyLeaderboard(sortBy = 'wins', limit = 50) {
   } finally {
     client.release();
   }
+}
+
+// Get last month's leaderboard for registered players
+async function getLastMonthLeaderboard(sortBy = 'wins', limit = 50) {
+  return getMonthlyLeaderboard(sortBy, limit, getLastMonth());
 }
 
 // Get player rank
@@ -897,6 +911,7 @@ module.exports = {
   getLoggedInLeaderboard,
   getGuestLeaderboard,
   getMonthlyLeaderboard,
+  getLastMonthLeaderboard,
   getPlayerRank,
   getPlayerRankByType,
   getPlayerMonthlyRank,
