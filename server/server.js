@@ -5,28 +5,52 @@ const socketIo = require('socket.io');
 const path = require('path');
 const os = require('os');
 const db = require('./database');
-const crypto = require('crypto');
 const passport = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
+const rateLimit = require('express-rate-limit');
 const { version: VERSION } = require('../package.json');
+
+// Import modular components
+const { setupAuth } = require('./middleware/auth');
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const apiRoutes = require('./routes/api');
+const authRoutes = require('./routes/auth');
+const {
+  genGuestName,
+  sanitizeUsername,
+  sanitizeGameCode,
+  genMessageId,
+  generateGameCode,
+  sanitizeTank,
+  sanitizePlayers,
+} = require('./game/helpers');
+const {
+  GAME_WIDTH,
+  GAME_HEIGHT,
+  TANK_SIZE,
+  TANK_SPEED,
+  TANK_ROTATION_SPEED,
+  PROJECTILE_SPEED,
+  PROJECTILE_SIZE,
+  TANK_MAX_HEALTH,
+  UPDATE_RATE,
+  GAME_DURATION,
+  MAX_PLAYERS,
+  MAX_CONCURRENT_GAMES,
+  WEAPON_TYPES,
+  POWERUP_TYPES,
+  Obstacle,
+  generateObstacles,
+} = require('./game/constants');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: '*',
+    methods: ['GET', 'POST'],
+  },
 });
-
-// Generate guest player name
-function genGuestName() {
-  return `Player_${crypto.randomInt(100000, 999999)}`;
-}
-
-// Max player name length
-const MAX_NAME_LENGTH = 15;
 
 // Session and Passport middleware
 app.use(session({
@@ -50,48 +74,8 @@ if (process.env.NODE_ENV === 'production') {
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Passport Google Strategy
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "/auth/google/callback"
-  },
-  function(accessToken, refreshToken, profile, done) {
-    (async () => {
-      try {
-        let user = await db.getPlayerByGoogleId(profile.id);
-        if (!user) {
-          // Create new user
-          const playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-          user = {
-            id: playerId,
-            google_id: profile.id,
-            username: profile.displayName,
-            email: profile.emails[0].value,
-            stats: { gamesPlayed: 0, wins: 0, kills: 0, deaths: 0, totalScore: 0, highestKills: 0, lastPlayed: Date.now() }
-          };
-          await db.createPlayer(user);
-        }
-        return done(null, user);
-      } catch (err) {
-        return done(err, null);
-      }
-    })();
-  }
-));
-
-passport.serializeUser((user, done) => {
-  done(null, user.id);
-});
-
-passport.deserializeUser(async (id, done) => {
-  try {
-    const user = await db.getPlayer(id);
-    done(null, user);
-  } catch (err) {
-    done(err, null);
-  }
-});
+// Setup authentication
+setupAuth();
 
 // Initialize database tables on startup
 (async () => {
@@ -109,6 +93,25 @@ app.use(express.static(path.join(__dirname, '../client')));
 // Add body parser middleware
 app.use(express.json());
 
+// Rate limiting for API endpoints
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts
+  message: { error: 'Too many authentication attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+app.use('/api/', apiLimiter);
+
 // API route to get game version
 app.get('/api/version', (req, res) => {
   res.json({ version: VERSION });
@@ -123,152 +126,14 @@ app.get('/api/user', (req, res) => {
   }
 });
 
-// API route to get player data by playerId
-app.get('/api/player/:playerId', async (req, res) => {
-  try {
-    const playerId = req.params.playerId;
-    const playerData = await db.getPlayer(playerId);
-    
-    if (playerData) {
-      // Also fetch raw data to check for google_id
-      const rawData = await db.getPlayerRaw(playerId);
-      const player = {
-        ...playerData,
-        googleId: rawData?.google_id || null
-      };
-      res.json({ success: true, player });
-    } else {
-      res.json({ success: false, message: 'Player not found' });
-    }
-  } catch (error) {
-    console.error('Error fetching player:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
+// Use modular routes
+app.use('/api', apiRoutes);
+app.use('/auth', authRoutes);
 
-// API route to change player name
-app.post('/api/change-name', async (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  }
-  const { newName } = req.body;
-  if (!newName || newName.trim().length === 0) {
-    return res.status(400).json({ error: 'Name cannot be empty' });
-  }
-  const trimmed = String(newName).trim();
-  if (trimmed.length < 2 || trimmed.length > MAX_NAME_LENGTH) {
-    return res.status(400).json({ error: `Name must be between 2 and ${MAX_NAME_LENGTH} characters` });
-  }
-  try {
-    // Check if name is already taken
-    const isTaken = await db.isUsernameTaken(newName.trim(), req.user.id);
-    if (isTaken) {
-      return res.status(409).json({ error: 'Name already in use' });
-    }
-    // Update name
-    const safeName = trimmed.slice(0, MAX_NAME_LENGTH);
-    await db.updatePlayerUsername(req.user.id, safeName);
-    res.json({ success: true, name: safeName });
-  } catch (err) {
-    console.error('Error changing name:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// API route to get last game for a player
-app.get('/api/player/:playerId/lastGame', async (req, res) => {
-  try {
-    const playerId = req.params.playerId;
-    const lastGame = await db.getLastGame(playerId);
-    
-    if (lastGame) {
-      res.json({ success: true, lastGame });
-    } else {
-      res.json({ success: false, message: 'No games found' });
-    }
-  } catch (error) {
-    console.error('Error fetching last game:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// API route to update player tank color
-app.post('/api/player/updateColor', async (req, res) => {
-  try {
-    const { playerId, color } = req.body;
-    
-    if (!playerId) {
-      return res.status(400).json({ success: false, message: 'Player ID required' });
-    }
-    
-    await db.updatePlayerColor(playerId, color);
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error updating player color:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// Auth routes
-app.get('/auth/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] }));
-
-app.get('/auth/google/callback', 
-  passport.authenticate('google', { failureRedirect: '/' }),
-  function(req, res) {
-    // Successful authentication, redirect home.
-    res.redirect('/');
-  });
-
-app.get('/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) {
-      console.error('Logout error:', err);
-      return res.status(500).send('Logout failed');
-    }
-    req.session.destroy((err) => {
-      if (err) {
-        console.error('Session destroy error:', err);
-        return res.status(500).send('Session destroy failed');
-      }
-      res.redirect('/?logout=true');
-    });
-  });
-});
-
-// Game state
+// Game state (legacy - to be removed in future refactor)
 const players = {};
 const projectiles = [];
 const obstacles = [];
-const GAME_WIDTH = 1067;
-const GAME_HEIGHT = 600;
-const TANK_SIZE = 20;
-const TANK_SPEED = 5;
-const TANK_ROTATION_SPEED = 5;
-const PROJECTILE_SPEED = 8;
-const PROJECTILE_SIZE = 5;
-const TANK_MAX_HEALTH = 100;
-const UPDATE_RATE = 60; // updates per second
-
-// Weapon types configuration
-const WEAPON_TYPES = {
-  RAPID_FIRE: { name: 'Rapid Fire', duration: 8000, color: '#ff4444', damage: 7 },
-  TRIPLE_SHOT: { name: 'Triple Shot', duration: 10000, color: '#44ff44', damage: 8 },
-  LASER: { name: 'Laser', duration: 12000, color: '#4444ff', damage: 15 },
-  ROCKETS: { name: 'Rockets', duration: 15000, color: '#ff44ff', damage: 20 }
-};
-
-// Power-up types
-const POWERUP_TYPES = {
-  SPEED_BOOST: { name: 'Speed Boost', duration: 8000, color: '#00d2ff', multiplier: 2.0 }, // Changed from 1.5 to 2.0
-  SHIELD: { name: 'Shield', duration: 10000, color: '#a8e6cf' },
-  HEALTH: { name: 'Health Pack', duration: 0, color: '#ff6b9d', healAmount: 50 },
-  INVINCIBILITY: { name: 'Invincibility', duration: 5000, color: '#ffd93d' },
-  AMMO_REFILL: { name: 'Ammo Refill', duration: 0, color: '#ff8c42', ammoRefill: 20 }
-}
-const GAME_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
-const MAX_PLAYERS = 10;
-const MAX_CONCURRENT_GAMES = 5; // Maximum number of games that can run simultaneously
 
 // Game state management
 let gameStartTime = null;
@@ -282,120 +147,6 @@ const lobbies = {}; // { gameCode: { players: {}, host: socketId, state: 'waitin
 // Global chat history (keeps recent messages for new clients)
 const GLOBAL_CHAT_HISTORY_LIMIT = 200;
 const globalChatHistory = [];
-
-// Helper to generate unique message IDs
-function genMessageId() {
-  return Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
-}
-
-function generateGameCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded similar looking chars
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-// Helper function to sanitize tank data (remove circular references from AI controllers)
-function sanitizeTank(tank) {
-  return {
-    id: tank.id,
-    x: tank.x,
-    y: tank.y,
-    rotation: tank.rotation,
-    turretRotation: tank.turretRotation,
-    health: tank.health,
-    velocityX: tank.velocityX,
-    velocityY: tank.velocityY,
-    score: tank.score,
-    kills: tank.kills,
-    livesRemaining: tank.livesRemaining,
-    isAlive: tank.isAlive,
-    ammo: tank.ammo,
-    activeWeapon: tank.activeWeapon,
-    activePowerup: tank.activePowerup,
-    isAI: tank.isAI || false,
-    aiDifficulty: tank.aiDifficulty || null,
-    team: tank.team || null,
-    username: tank.username,
-    color: tank.color || null
-  };
-}
-
-// Helper function to sanitize all players in a lobby
-function sanitizePlayers(players) {
-  const sanitized = {};
-  Object.keys(players).forEach(playerId => {
-    sanitized[playerId] = sanitizeTank(players[playerId]);
-  });
-  return sanitized;
-}
-
-// Obstacle class
-class Obstacle {
-  constructor(x, y, width, height) {
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.height = height;
-  }
-
-  collidesWith(x, y, size) {
-    return x + size > this.x &&
-           x - size < this.x + this.width &&
-           y + size > this.y &&
-           y - size < this.y + this.height;
-  }
-}
-
-// Generate random obstacles for the map with guaranteed pathways
-function generateObstacles() {
-  const obsArray = [];
-  const numObstacles = Math.random() * 6 + 8; // 8-14 obstacles
-  const MIN_GAP = TANK_SIZE * 3; // Minimum gap between obstacles (3x tank width)
-  
-  for (let i = 0; i < numObstacles; i++) {
-    let x, y, width, height, valid;
-    let attempts = 0;
-    const maxAttempts = 50;
-    
-    // Keep trying until we find a valid position
-    do {
-      valid = true;
-      attempts++;
-      width = Math.random() * 30 + 35; // 35-65 width
-      height = Math.random() * 30 + 35; // 35-65 height
-      x = Math.random() * (GAME_WIDTH - width);
-      y = Math.random() * (GAME_HEIGHT - height);
-      
-      // Check if too close to edges (keep safe margin)
-      if (x < 60 || x + width > GAME_WIDTH - 60 || 
-          y < 60 || y + height > GAME_HEIGHT - 60) {
-        valid = false;
-        continue;
-      }
-      
-      // Check if overlaps with existing obstacles with guaranteed gap
-      for (let obs of obsArray) {
-        // Check for collision with padding
-        if (!(x + width + MIN_GAP < obs.x || x - MIN_GAP > obs.x + obs.width ||
-              y + height + MIN_GAP < obs.y || y - MIN_GAP > obs.y + obs.height)) {
-          valid = false;
-          break;
-        }
-      }
-    } while (!valid && attempts < maxAttempts);
-    
-    // Only add obstacle if we found a valid position
-    if (valid) {
-      obsArray.push(new Obstacle(x, y, width, height));
-    }
-  }
-  return obsArray;
-}
-
-const generatedObstacles = generateObstacles();
 
 // AI Controller class
 class AIController {
@@ -1099,6 +850,32 @@ function broadcastGameBrowserStatus() {
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
+  
+  // Rate limiting for socket events
+  socket.eventCounts = {};
+  socket.rateLimitExceeded = false;
+  
+  // Helper to check rate limits
+  const checkRateLimit = (eventName, maxPerSecond) => {
+    const now = Date.now();
+    if (!socket.eventCounts[eventName]) {
+      socket.eventCounts[eventName] = { count: 0, resetAt: now + 1000 };
+    }
+    if (now > socket.eventCounts[eventName].resetAt) {
+      socket.eventCounts[eventName] = { count: 0, resetAt: now + 1000 };
+    }
+    socket.eventCounts[eventName].count++;
+    if (socket.eventCounts[eventName].count > maxPerSecond) {
+      if (!socket.rateLimitExceeded) {
+        socket.rateLimitExceeded = true;
+        socket.emit('rateLimitExceeded', { message: 'Too many requests' });
+        setTimeout(() => { socket.rateLimitExceeded = false; }, 5000);
+      }
+      return false;
+    }
+    return true;
+  };
+  
   // Allow client to register its persistent player ID for ownership checks
   socket.on('registerPlayer', async (data) => {
     try {
@@ -1151,8 +928,10 @@ io.on('connection', (socket) => {
   
   // Lobby event handlers
   socket.on('createGame', async (data) => {
-    const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
-    const username = data?.username || genGuestName();
+    if (!checkRateLimit('createGame', 3)) return; // Max 3 per second
+    
+    const playerId = data?.playerId || socket.id;
+    const username = sanitizeUsername(data?.username) || genGuestName();
     const tankColor = data?.tankColor || null;
     
     // Register/update player in database
@@ -1217,9 +996,13 @@ io.on('connection', (socket) => {
   });
   
   socket.on('joinGame', (data) => {
-    const gameCode = data.gameCode.toUpperCase();
-    const playerId = data?.playerId || socket.id; // Fallback to socket ID if no player ID
-    const username = data?.username || genGuestName();
+    const gameCode = sanitizeGameCode(data?.gameCode);
+    if (!gameCode) {
+      socket.emit('lobbyError', { message: 'Invalid game code!' });
+      return;
+    }
+    const playerId = data?.playerId || socket.id;
+    const username = sanitizeUsername(data?.username) || genGuestName();
     const tankColor = data?.tankColor || null;
     const asSpectator = data?.asSpectator || false;
     
@@ -1725,8 +1508,9 @@ io.on('connection', (socket) => {
 
   // Lobby chat: broadcast messages to all players in the same lobby
   socket.on('lobbyChatMessage', (data) => {
+    if (!checkRateLimit('lobbyChatMessage', 5)) return; // Max 5 per second
     try {
-      const message = String((data && data.message) || '').trim().slice(0, 500);
+      const message = String((data && data.message) || '').trim().slice(0, 200);
       const gameCode = socket.gameCode;
       if (!message || !gameCode || !lobbies[gameCode]) return;
 
@@ -1959,6 +1743,7 @@ io.on('connection', (socket) => {
 
   // Handle player movement
   socket.on('move', (data) => {
+    if (!checkRateLimit('move', 120)) return; // Max 120 per second (2x update rate)
     const gameCode = socket.gameCode;
     if (!gameCode || !lobbies[gameCode] || socket.isSpectator) return;
     
@@ -2001,6 +1786,7 @@ io.on('connection', (socket) => {
 
   // Handle shooting
   socket.on('shoot', (data) => {
+    if (!checkRateLimit('shoot', 30)) return; // Max 30 per second
     const gameCode = socket.gameCode;
     if (!gameCode || !lobbies[gameCode] || socket.isSpectator) return;
     
@@ -2417,7 +2203,7 @@ setInterval(() => {
   const INACTIVE_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
   
   // Clean up inactive waiting lobbies
-  Object.keys(lobbies).forEach(gameCode => {
+  for (const gameCode in lobbies) {
     const lobby = lobbies[gameCode];
     if (lobby.state === 'waiting' && now - lobby.lastActivity > INACTIVE_TIMEOUT) {
       console.log(`Cleaning up inactive lobby ${gameCode} (no activity for 10+ minutes)`);
@@ -2433,14 +2219,14 @@ setInterval(() => {
       // Update game browser status
       broadcastGameBrowserStatus();
     }
-  });
+  }
   
   // Process each lobby separately
-  Object.keys(lobbies).forEach(gameCode => {
+  for (const gameCode in lobbies) {
     const lobby = lobbies[gameCode];
     
     // Skip if not playing
-    if (lobby.state !== 'playing') return;
+    if (lobby.state !== 'playing') continue;
     
     const now = Date.now();
     
@@ -2461,9 +2247,9 @@ setInterval(() => {
     }
     
     // Check for pickups
-    Object.keys(lobby.gamePlayers).forEach(playerId => {
+    for (const playerId in lobby.gamePlayers) {
       const player = lobby.gamePlayers[playerId];
-      if (!player.isAlive) return;
+      if (!player.isAlive) continue;
       
       // Check weapon collision
       if (lobby.gameWeapons) {
@@ -2525,7 +2311,7 @@ setInterval(() => {
           player.lastAmmoRegen = now;
         }
       }
-    });
+    }
     
     // Update AI players (skip during countdown)
     if (!lobby.countdownActive) {
@@ -2539,14 +2325,14 @@ setInterval(() => {
     
     // Check win conditions for this lobby
     checkWinConditions(gameCode);
-    if (lobby.state === 'finished') return;
+    if (lobby.state === 'finished') continue;
     
     // Update player positions for this lobby
-    Object.keys(lobby.gamePlayers).forEach(playerId => {
+    for (const playerId in lobby.gamePlayers) {
       const tank = lobby.gamePlayers[playerId];
       
       // Skip updates for dead/spectating tanks
-      if (!tank.isAlive) return;
+      if (!tank.isAlive) continue;
       
       const newX = tank.x + tank.velocityX;
       const newY = tank.y + tank.velocityY;
@@ -2562,7 +2348,7 @@ setInterval(() => {
 
       // Check collision with other tanks
       if (!colliding) {
-        for (let otherPlayerId of Object.keys(lobby.gamePlayers)) {
+        for (const otherPlayerId in lobby.gamePlayers) {
           if (otherPlayerId !== playerId) {
             const otherTank = lobby.gamePlayers[otherPlayerId];
             
@@ -2592,7 +2378,7 @@ setInterval(() => {
       if (tank.x > GAME_WIDTH) tank.x = 0;
       if (tank.y < 0) tank.y = GAME_HEIGHT;
       if (tank.y > GAME_HEIGHT) tank.y = 0;
-    });
+    }
 
     // Update projectiles for this lobby
     for (let i = lobby.gameProjectiles.length - 1; i >= 0; i--) {
@@ -2624,13 +2410,13 @@ setInterval(() => {
 
       // Check collision with tanks
       let hitTank = false;
-      Object.keys(lobby.gamePlayers).forEach(playerId => {
-        if (hitTank) return; // Already hit a tank
+      for (const playerId in lobby.gamePlayers) {
+        if (hitTank) break; // Already hit a tank
         
         const tank = lobby.gamePlayers[playerId];
         
         // Skip collision check with dead/spectating tanks
-        if (!tank.isAlive) return;
+        if (!tank.isAlive) continue;
         
         const dx = lobby.gameProjectiles[i].x - tank.x;
         const dy = lobby.gameProjectiles[i].y - tank.y;
@@ -2753,17 +2539,24 @@ setInterval(() => {
             }
           }
         }
-      });
+      }
     }
 
     // Broadcast game state to all clients in this lobby
+    // Cache and reuse sanitized data to reduce allocations
+    const projectilesData = [];
+    for (let i = 0; i < lobby.gameProjectiles.length; i++) {
+      const p = lobby.gameProjectiles[i];
+      projectilesData.push({ x: p.x, y: p.y, rotation: p.rotation, weaponType: p.weaponType });
+    }
+    
     io.to(gameCode).emit('gameState', {
       players: sanitizePlayers(lobby.gamePlayers),
-      projectiles: lobby.gameProjectiles.map(p => ({ x: p.x, y: p.y, rotation: p.rotation, weaponType: p.weaponType })),
+      projectiles: projectilesData,
       weapons: lobby.gameWeapons,
       powerups: lobby.gamePowerups
     });
-  }); // End of lobbies forEach
+  }
 }, 1000 / UPDATE_RATE);
 
 const PORT = process.env.PORT || 3000;
@@ -2821,3 +2614,9 @@ process.on('SIGINT', async () => {
     process.exit(0);
   });
 });
+
+// Error handling middleware (must be last)
+app.use(errorHandler);
+app.use(notFoundHandler);
+
+module.exports = { server, io, lobbies };

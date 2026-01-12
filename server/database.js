@@ -211,26 +211,16 @@ async function updatePlayerStats(playerId, gameStats) {
 async function getLeaderboard(sortBy = 'wins', limit = 100) {
   const client = await pool.connect();
   try {
-    let orderBy;
-    switch (sortBy) {
-      case 'wins':
-        orderBy = 'wins DESC';
-        break;
-      case 'kills':
-        orderBy = 'kills DESC';
-        break;
-      case 'score':
-        orderBy = 'total_score DESC';
-        break;
-      case 'winRate':
-        orderBy = 'CASE WHEN games_played > 0 THEN CAST(wins AS FLOAT) / games_played ELSE 0 END DESC';
-        break;
-      case 'kd':
-        orderBy = 'CASE WHEN deaths > 0 THEN CAST(kills AS FLOAT) / deaths ELSE kills END DESC';
-        break;
-      default:
-        orderBy = 'wins DESC';
-    }
+    // Whitelist valid sort options to prevent SQL injection
+    const validSorts = {
+      'wins': 'wins DESC',
+      'kills': 'kills DESC',
+      'score': 'total_score DESC',
+      'winRate': 'CASE WHEN games_played > 0 THEN CAST(wins AS FLOAT) / games_played ELSE 0 END DESC',
+      'kd': 'CASE WHEN deaths > 0 THEN CAST(kills AS FLOAT) / deaths ELSE kills END DESC'
+    };
+    
+    const orderBy = validSorts[sortBy] || validSorts['wins'];
     
     const result = await client.query(`
       SELECT * FROM players 
