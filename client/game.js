@@ -55,7 +55,6 @@ let touchControls = {
   aimJoystickHandle: null,
   aimLastAngle: 0,
   aimLastFire: 0,
-  autoFireEnabled: false,
   lastTouchAngle: 0
 };
 
@@ -224,9 +223,6 @@ function initMobileControls() {
     initAimJoystick();
     // Initialize fire button (no-op if missing)
     initFireButton();
-
-    // Initialize auto-fire toggle
-    initAutoFireToggle();
 
     // Update canvas scale initially
     updateCanvasScale();
@@ -404,16 +400,6 @@ function initFireButton() {
   fireButton.addEventListener('mousedown', handleFire);
 }
 
-// Initialize auto-fire toggle
-function initAutoFireToggle() {
-  const checkbox = document.getElementById('autoFireCheckbox');
-  if (checkbox) {
-    checkbox.addEventListener('change', (e) => {
-      touchControls.autoFireEnabled = e.target.checked;
-    });
-  }
-}
-
 // Initialize right-side aim joystick (controls turret direction and firing)
 function initAimJoystick() {
   const base = touchControls.aimJoystickBase;
@@ -509,7 +495,7 @@ function initAimJoystick() {
     // If pushed outward enough, fire
     if (dist > 18) {
       const now = Date.now();
-      const fireInterval = touchControls.autoFireEnabled ? 200 : 300; // faster if auto-fire
+      const fireInterval = 150; // Faster fire rate for touch controls
       if (!touchControls.aimLastFire || now - touchControls.aimLastFire > fireInterval) {
         playShootSound();
         socket.emit('shoot', {});
@@ -1177,17 +1163,6 @@ function gameLoop() {
       if (!window._loggedNotAlive) {
         console.log('Cannot move - tank isAlive:', myTank.isAlive);
         window._loggedNotAlive = true;
-      }
-    }
-
-    // Handle auto-fire for mobile
-    if (isMobile && touchControls.autoFireEnabled && myTank.isAlive && !gameState.countdownActive && !gameState.gameFinished) {
-      // Auto-fire at a reasonable rate (every 200ms)
-      const now = Date.now();
-      if (!window.lastAutoFire || now - window.lastAutoFire > 200) {
-        playShootSound();
-        socket.emit('shoot', {});
-        window.lastAutoFire = now;
       }
     }
 
