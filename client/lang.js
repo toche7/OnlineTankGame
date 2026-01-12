@@ -48,9 +48,8 @@ const translations = {
     
     // Game Modes
     gameMode: "🎮 โหมดเกม:",
-    soloVsAI: "เล่นคนเดียว VS AI",
+    soloVsAI: "โหมดรอดชีวิต",
     coopVsAI: "ร่วมมือ VS AI",
-    multiplayerAI: "ผู้เล่นหลายคน + AI",
     multiplayerOnly: "ผู้เล่นหลายคนเท่านั้น",
     teamPvP: "ทีม VS ทีม (PvP)",
     
@@ -175,9 +174,8 @@ const translations = {
     
     // Game Modes
     gameMode: "🎮 Game Mode:",
-    soloVsAI: "Solo vs AI Bots",
+    soloVsAI: "Survival",
     coopVsAI: "Co-op vs AI Bots",
-    multiplayerAI: "Multiplayer + AI Fill",
     multiplayerOnly: "Multiplayer Only",
     teamPvP: "Team vs Team (PvP)",
     

@@ -1032,7 +1032,7 @@ function updatePlayersList() {
       // Free-for-all mode with custom color selected
       colorIndicator = `<span style="display: inline-block; width: 12px; height: 12px; background: ${player.tankColor}; border: 1px solid rgba(255,255,255,0.5); border-radius: 50%; margin-right: 5px; vertical-align: middle;"></span>`;
     } else {
-      // Default green/red split for all other cases (including co-op, ai_mixed)
+      // Default green/red split for all other cases (including co-op)
       colorIndicator = `<span style="display: inline-block; width: 12px; height: 12px; background: linear-gradient(135deg, #44ff44 0%, #44ff44 50%, #ff0000 50%, #ff0000 100%); border: 1px solid rgba(255,255,255,0.5); border-radius: 50%; margin-right: 5px; vertical-align: middle;"></span>`;
     }
     

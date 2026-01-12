@@ -43,6 +43,9 @@ const {
   generateObstacles,
 } = require('./game/constants');
 
+// Max player name length
+const MAX_NAME_LENGTH = 15;
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -1229,7 +1232,7 @@ io.on('connection', (socket) => {
     const playerCount = Object.keys(lobbies[gameCode].players).length;
     if (gameMode === 'multiplayer' && playerCount < 2) {
       socket.emit('lobbyError', { 
-        message: 'Multiplayer mode requires at least 2 players! Use "Solo vs AI" mode to play alone.' 
+        message: 'Multiplayer mode requires at least 2 players! Use "Survival" mode to play alone.' 
       });
       return;
     }
@@ -1279,14 +1282,14 @@ io.on('connection', (socket) => {
     
     // Spawn AI tanks based on game mode
     let numAI = 0; // Initialize outside the if block
-    if (gameMode === 'ai_solo' || gameMode === 'ai_coop' || gameMode === 'ai_mixed') {
+    if (gameMode === 'ai_solo' || gameMode === 'ai_coop') {
       numAI = Math.min(Math.max(1, aiCount), 9); // Clamp between 1-9
       
       console.log(`\n=== SPAWNING AI FOR GAME MODE: ${gameMode} ===`);
       
       for (let i = 0; i < numAI; i++) {
         const aiId = `ai_${gameCode}_${i}`;
-        // Set team: 'ai' for co-op mode, null for solo/mixed modes
+        // Set team: 'ai' for co-op mode, null for solo mode
         const aiTeam = gameMode === 'ai_coop' ? 'ai' : null;
         const aiTank = new Tank(aiId, lobbies[gameCode].gameObstacles, true, aiDifficulty, null, null, aiTeam);
         lobbies[gameCode].gamePlayers[aiId] = aiTank;
@@ -1478,34 +1481,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Team chat for Team vs Team PvP
-  socket.on('teamChatMessage', (data) => {
-    const { message, team } = data;
-    const gameCode = socket.gameCode;
-    
-    if (!gameCode || !lobbies[gameCode]) {
-      return;
-    }
-    
-    const lobby = lobbies[gameCode];
-    const player = lobby.players[socket.id];
-    
-    if (!player || player.team !== team) {
-      return;
-    }
-    
-    // Broadcast to all players on the same team
-    Object.keys(lobby.players).forEach(playerId => {
-      if (lobby.players[playerId].team === team && lobby.gameSocketIds && lobby.gameSocketIds.has(playerId)) {
-        io.to(playerId).emit('teamChatMessage', {
-          playerName: player.username,
-          message: message,
-          team: team
-        });
-      }
-    });
-  });
-
   // Lobby chat: broadcast messages to all players in the same lobby
   socket.on('lobbyChatMessage', (data) => {
     if (!checkRateLimit('lobbyChatMessage', 5)) return; // Max 5 per second
@@ -1689,7 +1664,7 @@ io.on('connection', (socket) => {
         // New player joining: create new tank
         // Determine player team based on game mode
         let playerTeam = null;
-        if (lobby.gameMode === 'ai_coop' || lobby.gameMode === 'ai_mixed') {
+        if (lobby.gameMode === 'ai_coop') {
           playerTeam = 'human';
         } else if (lobby.gameMode === 'team_pvp') {
           // Get team from lobby player data - use current socket.id first, then search by persistentPlayerId
@@ -2021,7 +1996,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      await db.getPlayer(data.playerId, safeName);
+      await db.updatePlayerUsername(data.playerId, safeName);
       console.log(`Username updated: ${safeName} (${data.playerId}) by socket ${socket.id}`);
       if (typeof callback === 'function') callback({ success: true, name: safeName });
     } catch (error) {

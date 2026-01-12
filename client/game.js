@@ -787,12 +787,6 @@ socket.on('init', (data) => {
         teamDisplay.textContent = '🛡️ TEAM B';
         teamDisplay.style.color = '#44aaff';
       }
-      
-      // Show team chat
-      const chatContainer = document.getElementById('chatContainer');
-      if (chatContainer) {
-        chatContainer.style.display = 'block';
-      }
     }
   }
   
@@ -1892,45 +1886,6 @@ function showFinishScreen(data) {
   // Show the finish screen
   finishScreen.classList.remove('hidden');
 }
-
-// Team chat handlers
-const chatInput = document.getElementById('chatInput');
-const chatMessages = document.getElementById('chatMessages');
-const toggleChatBtn = document.getElementById('toggleChatBtn');
-const chatContainer = document.getElementById('chatContainer');
-
-if (toggleChatBtn && chatContainer) {
-  toggleChatBtn.addEventListener('click', () => {
-    chatMessages.style.display = chatMessages.style.display === 'none' ? 'block' : 'none';
-    toggleChatBtn.textContent = chatMessages.style.display === 'none' ? '💬' : '✖';
-  });
-}
-
-if (chatInput) {
-  chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && chatInput.value.trim()) {
-      socket.emit('teamChatMessage', {
-        message: chatInput.value.trim(),
-        team: gameState.myTeam
-      });
-      chatInput.value = '';
-    }
-  });
-}
-
-socket.on('teamChatMessage', (data) => {
-  if (chatMessages && gameState.gameMode === 'team_pvp') {
-    const msgDiv = document.createElement('div');
-    msgDiv.className = 'chat-message';
-    msgDiv.style.backgroundColor = data.team === 'team_a' ? 'rgba(255, 136, 68, 0.2)' : 'rgba(68, 170, 255, 0.2)';
-    msgDiv.style.padding = '5px 8px';
-    msgDiv.style.marginBottom = '4px';
-    msgDiv.style.borderRadius = '4px';
-    msgDiv.textContent = `${data.playerName}: ${data.message}`;
-    chatMessages.appendChild(msgDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-});
 
 // Setup finish screen button handlers
 document.getElementById('statsLink').addEventListener('click', (e) => {
