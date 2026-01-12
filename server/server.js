@@ -1213,7 +1213,6 @@ io.on('connection', (socket) => {
     const gameCode = data.gameCode;
     const tankSpeed = data.tankSpeed || TANK_SPEED; // Default if not provided
     const melody = data.melody || 'battle'; // Default melody
-    const debugMode = data.debugMode || false; // Debug mode for one-hit kills
     const gameMode = data.gameMode || 'ai_solo';
     const aiDifficulty = data.aiDifficulty || 'medium';
     const aiCount = data.aiCount || 3;
@@ -1264,7 +1263,6 @@ io.on('connection', (socket) => {
     lobbies[gameCode].gameStartTime = Date.now();
     lobbies[gameCode].tankSpeed = tankSpeed; // Store tank speed setting
     lobbies[gameCode].melody = melody; // Store melody setting
-    lobbies[gameCode].debugMode = debugMode; // Store debug mode flag
     lobbies[gameCode].weaponsEnabled = data.weaponsEnabled !== false; // Default true
     lobbies[gameCode].powerupsEnabled = data.powerupsEnabled !== false; // Default true
     lobbies[gameCode].limitedAmmo = data.limitedAmmo || false; // Limited ammo mode
@@ -1291,9 +1289,10 @@ io.on('connection', (socket) => {
         const aiId = `ai_${gameCode}_${i}`;
         // Set team: 'ai' for co-op mode, null for solo mode
         const aiTeam = gameMode === 'ai_coop' ? 'ai' : null;
-        const aiTank = new Tank(aiId, lobbies[gameCode].gameObstacles, true, aiDifficulty, null, null, aiTeam);
+        const botName = `Bot`;
+        const aiTank = new Tank(aiId, lobbies[gameCode].gameObstacles, true, aiDifficulty, null, botName, aiTeam);
         lobbies[gameCode].gamePlayers[aiId] = aiTank;
-        console.log(`Spawned AI ${aiId} with team: ${aiTeam}, difficulty: ${aiDifficulty}`);
+        console.log(`Spawned AI ${aiId} (${botName}) with team: ${aiTeam}, difficulty: ${aiDifficulty}`);
       }
       
       console.log(`Spawned ${numAI} AI tanks with difficulty ${aiDifficulty} for game ${gameCode}`);
@@ -1336,7 +1335,6 @@ io.on('connection', (socket) => {
     console.log(`Game ${gameCode} started with settings:`, {
       tankSpeed,
       melody,
-      debugMode: debugMode || false,
       weapons: lobbies[gameCode].weaponsEnabled,
       powerups: lobbies[gameCode].powerupsEnabled,
       gameMode: gameMode,
@@ -2008,8 +2006,8 @@ io.on('connection', (socket) => {
   socket.on('getPersonalStats', async (data) => {
     try {
       const player = await db.getPlayer(data.playerId);
-      const sortBy = 'wins'; // Default sort
-      const rank = await db.getPlayerRank(data.playerId, sortBy);
+      const sortBy = data.sortBy || 'wins';
+      const rank = await db.getPlayerRankByType(data.playerId, sortBy);
       
       socket.emit('personalStats', {
         ...player,
@@ -2024,11 +2022,15 @@ io.on('connection', (socket) => {
   socket.on('getLeaderboard', async (data) => {
     try {
       const sortBy = data.sortBy || 'wins';
-      const leaderboard = await db.getLeaderboard(sortBy, 100); // Changed from 50 to 100
-      socket.emit('leaderboard', leaderboard);
+      const loggedInLeaderboard = await db.getLoggedInLeaderboard(sortBy, 50);
+      const guestLeaderboard = await db.getGuestLeaderboard(sortBy, 50);
+      socket.emit('leaderboards', {
+        loggedIn: loggedInLeaderboard,
+        guest: guestLeaderboard
+      });
     } catch (error) {
       console.error('Error getting leaderboard:', error);
-      socket.emit('leaderboard', []);
+      socket.emit('leaderboards', { loggedIn: [], guest: [] });
     }
   });
 
@@ -2432,18 +2434,14 @@ setInterval(() => {
             return; // Skip damage completely
           }
           
-          // Calculate damage based on weapon type and debug mode
+          // Calculate damage based on weapon type
           let damage;
-          if (lobby.debugMode) {
-            damage = 999; // One-hit kill in debug mode
+          // Get weapon damage or use default 10
+          const projectileWeaponType = lobby.gameProjectiles[i].weaponType;
+          if (projectileWeaponType && WEAPON_TYPES[projectileWeaponType]) {
+            damage = WEAPON_TYPES[projectileWeaponType].damage;
           } else {
-            // Get weapon damage or use default 10
-            const projectileWeaponType = lobby.gameProjectiles[i].weaponType;
-            if (projectileWeaponType && WEAPON_TYPES[projectileWeaponType]) {
-              damage = WEAPON_TYPES[projectileWeaponType].damage;
-            } else {
-              damage = 10; // Default damage for normal bullets
-            }
+            damage = 10; // Default damage for normal bullets
           }
           
           // Check if tank has shield - reduce damage by 50%

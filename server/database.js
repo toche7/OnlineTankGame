@@ -253,6 +253,94 @@ async function getLeaderboard(sortBy = 'wins', limit = 100) {
   }
 }
 
+// Get leaderboard for logged-in users only
+async function getLoggedInLeaderboard(sortBy = 'wins', limit = 50) {
+  const client = await pool.connect();
+  try {
+    const validSorts = {
+      'wins': 'wins DESC',
+      'kills': 'kills DESC',
+      'score': 'total_score DESC',
+      'winRate': 'CASE WHEN games_played > 0 THEN CAST(wins AS FLOAT) / games_played ELSE 0 END DESC',
+      'kd': 'CASE WHEN deaths > 0 THEN CAST(kills AS FLOAT) / deaths ELSE kills END DESC'
+    };
+    
+    const orderBy = validSorts[sortBy] || validSorts['wins'];
+    
+    const result = await client.query(`
+      SELECT * FROM players 
+      WHERE games_played > 0 AND google_id IS NOT NULL
+      ORDER BY ${orderBy}
+      LIMIT $1
+    `, [limit]);
+    
+    return result.rows.map(player => ({
+      id: player.id,
+      username: player.username,
+      tankColor: player.tank_color,
+      isGoogle: true,
+      stats: {
+        gamesPlayed: player.games_played,
+        wins: player.wins,
+        kills: player.kills,
+        deaths: player.deaths,
+        totalScore: player.total_score,
+        highestKills: player.highest_kills,
+        lastPlayed: player.last_played
+      }
+    }));
+  } catch (err) {
+    console.error('Error in getLoggedInLeaderboard:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Get leaderboard for guest users only
+async function getGuestLeaderboard(sortBy = 'wins', limit = 50) {
+  const client = await pool.connect();
+  try {
+    const validSorts = {
+      'wins': 'wins DESC',
+      'kills': 'kills DESC',
+      'score': 'total_score DESC',
+      'winRate': 'CASE WHEN games_played > 0 THEN CAST(wins AS FLOAT) / games_played ELSE 0 END DESC',
+      'kd': 'CASE WHEN deaths > 0 THEN CAST(kills AS FLOAT) / deaths ELSE kills END DESC'
+    };
+    
+    const orderBy = validSorts[sortBy] || validSorts['wins'];
+    
+    const result = await client.query(`
+      SELECT * FROM players 
+      WHERE games_played > 0 AND google_id IS NULL
+      ORDER BY ${orderBy}
+      LIMIT $1
+    `, [limit]);
+    
+    return result.rows.map(player => ({
+      id: player.id,
+      username: player.username,
+      tankColor: player.tank_color,
+      isGoogle: false,
+      stats: {
+        gamesPlayed: player.games_played,
+        wins: player.wins,
+        kills: player.kills,
+        deaths: player.deaths,
+        totalScore: player.total_score,
+        highestKills: player.highest_kills,
+        lastPlayed: player.last_played
+      }
+    }));
+  } catch (err) {
+    console.error('Error in getGuestLeaderboard:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Get player rank
 async function getPlayerRank(playerId, sortBy = 'wins') {
   const client = await pool.connect();
@@ -290,6 +378,64 @@ async function getPlayerRank(playerId, sortBy = 'wins') {
     return result.rows.length > 0 ? result.rows[0].rank : null;
   } catch (err) {
     console.error('Error in getPlayerRank:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Get player rank based on user type (logged-in or guest)
+async function getPlayerRankByType(playerId, sortBy = 'wins') {
+  const client = await pool.connect();
+  try {
+    // First check if player is logged in or guest
+    const playerCheck = await client.query(
+      'SELECT google_id FROM players WHERE id = $1',
+      [playerId]
+    );
+    
+    if (playerCheck.rows.length === 0) {
+      return null;
+    }
+    
+    const isLoggedIn = !!playerCheck.rows[0].google_id;
+    
+    let orderBy;
+    switch (sortBy) {
+      case 'wins':
+        orderBy = 'wins DESC, kills DESC, total_score DESC';
+        break;
+      case 'kills':
+        orderBy = 'kills DESC, wins DESC, total_score DESC';
+        break;
+      case 'score':
+        orderBy = 'total_score DESC, wins DESC, kills DESC';
+        break;
+      case 'winRate':
+        orderBy = 'CASE WHEN games_played > 0 THEN CAST(wins AS FLOAT) / games_played ELSE 0 END DESC, wins DESC, kills DESC';
+        break;
+      case 'kd':
+        orderBy = 'CASE WHEN deaths > 0 THEN CAST(kills AS FLOAT) / deaths ELSE kills END DESC, kills DESC, wins DESC';
+        break;
+      default:
+        orderBy = 'wins DESC, kills DESC, total_score DESC';
+    }
+    
+    // Filter by user type
+    const typeFilter = isLoggedIn ? 'google_id IS NOT NULL' : 'google_id IS NULL';
+    
+    const result = await client.query(`
+      WITH ranked_players AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY ${orderBy}) as rank
+        FROM players
+        WHERE games_played > 0 AND ${typeFilter}
+      )
+      SELECT rank FROM ranked_players WHERE id = $1
+    `, [playerId]);
+    
+    return result.rows.length > 0 ? result.rows[0].rank : null;
+  } catch (err) {
+    console.error('Error in getPlayerRankByType:', err);
     throw err;
   } finally {
     client.release();
@@ -550,7 +696,10 @@ module.exports = {
   getPlayer,
   updatePlayerStats,
   getLeaderboard,
+  getLoggedInLeaderboard,
+  getGuestLeaderboard,
   getPlayerRank,
+  getPlayerRankByType,
   saveGameRecord,
   getLastGame,
   updatePlayerColor,

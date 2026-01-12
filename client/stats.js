@@ -42,7 +42,8 @@ window.addEventListener('DOMContentLoaded', () => {
 // Load personal stats and leaderboard
 async function loadStats() {
   await fetchUsername();
-  socket.emit('getPersonalStats', { playerId });
+  const sortBy = document.getElementById('sortBy').value;
+  socket.emit('getPersonalStats', { playerId, sortBy });
   loadLeaderboard();
 }
 
@@ -81,13 +82,20 @@ socket.on('personalStats', (data) => {
   }
 });
 
-// Display leaderboard
-socket.on('leaderboard', (players) => {
-  const tbody = document.getElementById('leaderboardBody');
+// Display both leaderboards
+socket.on('leaderboards', (data) => {
+  displayLeaderboard('loggedInLeaderboardBody', data.loggedIn || [], true);
+  displayLeaderboard('guestLeaderboardBody', data.guest || [], false);
+});
+
+// Helper function to display a leaderboard
+function displayLeaderboard(tbodyId, players, isLoggedIn) {
+  const tbody = document.getElementById(tbodyId);
   tbody.innerHTML = '';
   
   if (!players || players.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="loading">No players yet. Play some games to appear on the leaderboard!</td></tr>';
+    const message = isLoggedIn ? 'No registered players yet.' : 'No guest players yet.';
+    tbody.innerHTML = `<tr><td colspan="8" class="loading">${message}</td></tr>`;
     return;
   }
   
@@ -120,19 +128,18 @@ socket.on('leaderboard', (players) => {
       <td>${winRate}%</td>
     `;
 
-    // Color username: blue for Google-signed players, white otherwise
-    // Apply after innerHTML so cells exist
+    // Color username: green for Google-signed players, white otherwise
     tbody.appendChild(row);
     try {
       const nameCell = row.cells[1];
-        if (nameCell) {
+      if (nameCell) {
         nameCell.style.color = player.isGoogle ? '#4caf50' : 'white';
       }
     } catch (e) {
       // ignore if cells not available
     }
   });
-});
+}
 
 // Helper function to escape HTML
 function escapeHtml(text) {
@@ -141,9 +148,35 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Tab switching functionality
+function setupTabs() {
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.leaderboard-tab');
+  
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const tabName = button.getAttribute('data-tab');
+      
+      // Remove active class from all buttons and tabs
+      tabButtons.forEach(btn => btn.classList.remove('active'));
+      tabContents.forEach(tab => tab.classList.remove('active'));
+      
+      // Add active class to clicked button and corresponding tab
+      button.classList.add('active');
+      const targetTab = tabName === 'loggedIn' ? 'loggedInTab' : 'guestTab';
+      document.getElementById(targetTab).classList.add('active');
+    });
+  });
+}
+
 // Event listeners
 document.getElementById('sortBy').addEventListener('change', loadLeaderboard);
 document.getElementById('refreshBtn').addEventListener('click', loadStats);
+
+// Initialize tabs
+window.addEventListener('DOMContentLoaded', () => {
+  setupTabs();
+});
 
 // Initial load
 socket.on('connect', () => {

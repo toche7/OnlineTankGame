@@ -41,16 +41,15 @@ const translations = {
     epicAdventure: "ผจญภัยมหากาพย์",
     retroGaming: "เกมยุคเก่า",
     
-    debugMode: "🐛 โหมดดีบัก (ตายทีเดียว)",
     enableWeapons: "🎯 เปิดอาวุธพิเศษ",
     enablePowerups: "⚡ เปิดไอเท็มพิเศษ",
     limitedAmmo: "🎯 กระสุนจำกัด (20 นัด, ฟื้นตามเวลา)",
     
     // Game Modes
     gameMode: "🎮 โหมดเกม:",
-    soloVsAI: "โหมดรอดชีวิต",
-    coopVsAI: "ร่วมมือ VS AI",
-    multiplayerOnly: "ผู้เล่นหลายคนเท่านั้น",
+    soloVsAI: "เอาตัวรอด",
+    coopVsAI: "ช่วยกันสู้ กับ AI",
+    multiplayerOnly: "เอาตัวรอด (ไม่มี AI)",
     teamPvP: "ทีม VS ทีม (PvP)",
     
     // AI Settings
@@ -167,7 +166,6 @@ const translations = {
     epicAdventure: "Epic Adventure",
     retroGaming: "Retro Gaming",
     
-    debugMode: "🐛 Debug Mode (One-hit kill)",
     enableWeapons: "🎯 Enable Special Weapons",
     enablePowerups: "⚡ Enable Power-ups",
     limitedAmmo: "🎯 Limited Ammo (20 bullets, regenerate over time)",
@@ -176,7 +174,7 @@ const translations = {
     gameMode: "🎮 Game Mode:",
     soloVsAI: "Survival",
     coopVsAI: "Co-op vs AI Bots",
-    multiplayerOnly: "Multiplayer Only",
+    multiplayerOnly: "Survival (No AI)",
     teamPvP: "Team vs Team (PvP)",
     
     // AI Settings

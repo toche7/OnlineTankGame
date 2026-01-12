@@ -243,9 +243,6 @@ function loadLastGameSettings() {
       if (settings.melodyChoice) {
         document.getElementById('melodyChoice').value = settings.melodyChoice;
       }
-      if (settings.debugMode !== undefined) {
-        document.getElementById('debugMode').checked = settings.debugMode;
-      }
       if (settings.weaponsEnabled !== undefined) {
         document.getElementById('weaponsEnabled').checked = settings.weaponsEnabled;
       }
@@ -736,7 +733,6 @@ startGameBtn.addEventListener('click', () => {
   if (isHost && currentGameCode) {
     const tankSpeed = parseInt(document.getElementById('tankSpeed').value);
     const melodyChoice = document.getElementById('melodyChoice').value;
-    const debugMode = document.getElementById('debugMode').checked;
     const weaponsEnabled = document.getElementById('weaponsEnabled').checked;
     const powerupsEnabled = document.getElementById('powerupsEnabled').checked;
     const limitedAmmo = document.getElementById('limitedAmmo').checked;
@@ -748,7 +744,6 @@ startGameBtn.addEventListener('click', () => {
     const gameSettings = {
       tankSpeed,
       melodyChoice,
-      debugMode,
       weaponsEnabled,
       powerupsEnabled,
       limitedAmmo,
@@ -762,7 +757,6 @@ startGameBtn.addEventListener('click', () => {
       gameCode: currentGameCode, 
       tankSpeed: tankSpeed,
       melody: melodyChoice,
-      debugMode: debugMode,
       weaponsEnabled: weaponsEnabled,
       powerupsEnabled: powerupsEnabled,
       limitedAmmo: limitedAmmo,

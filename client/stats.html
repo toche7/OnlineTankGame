@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>📊 Player Statistics & Leaderboard</h1>
+    <h1>Player Statistics & Leaderboard</h1>
     
     <div class="nav-buttons">
       <a href="#" id="backToLobby" class="btn btn-secondary">← Back to Lobby</a>
@@ -64,26 +64,60 @@
         <button id="refreshBtn" class="btn btn-small">🔄 Refresh</button>
       </div>
       
-      <div class="leaderboard-table">
-        <table id="leaderboard">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Player</th>
-              <th>Wins</th>
-              <th>Games</th>
-              <th>Kills</th>
-              <th>Deaths</th>
-              <th>K/D</th>
-              <th>Win Rate</th>
-            </tr>
-          </thead>
-          <tbody id="leaderboardBody">
-            <tr>
-              <td colspan="8" class="loading">Loading...</td>
-            </tr>
-          </tbody>
-        </table>
+      <!-- Tab Buttons -->
+      <div class="tab-buttons">
+        <button class="tab-btn active" data-tab="loggedIn">Registered Players</button>
+        <button class="tab-btn" data-tab="guest">Guest Players</button>
+      </div>
+      
+      <!-- Logged-In Users Leaderboard -->
+      <div class="leaderboard-tab active" id="loggedInTab">
+        <div class="leaderboard-table">
+          <table id="loggedInLeaderboard">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Player</th>
+                <th>Wins</th>
+                <th>Games</th>
+                <th>Kills</th>
+                <th>Deaths</th>
+                <th>K/D</th>
+                <th>Win Rate</th>
+              </tr>
+            </thead>
+            <tbody id="loggedInLeaderboardBody">
+              <tr>
+                <td colspan="8" class="loading">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Guest Users Leaderboard -->
+      <div class="leaderboard-tab" id="guestTab">
+        <div class="leaderboard-table">
+          <table id="guestLeaderboard">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Player</th>
+                <th>Wins</th>
+                <th>Games</th>
+                <th>Kills</th>
+                <th>Deaths</th>
+                <th>K/D</th>
+                <th>Win Rate</th>
+              </tr>
+            </thead>
+            <tbody id="guestLeaderboardBody">
+              <tr>
+                <td colspan="8" class="loading">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
