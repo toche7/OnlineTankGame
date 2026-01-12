@@ -92,11 +92,40 @@ function updateCanvasScale() {
   let cssWidth, cssHeight;
 
   if (isMobile && window.innerWidth >= window.innerHeight) {
-    // Mobile landscape: fit a 16:9 area within the screen
+    // Mobile/tablet landscape: fit a 16:9 area within the screen
     const availW = window.innerWidth;
     const availH = window.innerHeight;
-    cssWidth = Math.min(availW, Math.round(availH * 16 / 9));
-    cssHeight = Math.round(cssWidth * 9 / 16);
+    const deviceAspectRatio = availW / availH;
+    const targetAspectRatio = 16 / 9;
+    
+    // Add padding for non-16:9 screens (like iPads) - make canvas slightly smaller
+    const horizontalMargin = (deviceAspectRatio !== targetAspectRatio) ? 32 : 0;
+    const verticalMargin = 16; // Small margin for better fit
+    
+    // Calculate canvas size based on available space
+    const maxWidth = availW - horizontalMargin;
+    const maxHeight = availH - verticalMargin;
+    
+    // Calculate dimensions that maintain 16:9 aspect ratio
+    if (maxWidth / maxHeight > targetAspectRatio) {
+      // Height is the limiting factor
+      cssHeight = maxHeight;
+      cssWidth = Math.round(cssHeight * targetAspectRatio);
+    } else {
+      // Width is the limiting factor
+      cssWidth = maxWidth;
+      cssHeight = Math.round(cssWidth / targetAspectRatio);
+    }
+    
+    // Ensure we don't exceed screen bounds
+    if (cssWidth > maxWidth) {
+      cssWidth = maxWidth;
+      cssHeight = Math.round(cssWidth / targetAspectRatio);
+    }
+    if (cssHeight > maxHeight) {
+      cssHeight = maxHeight;
+      cssWidth = Math.round(cssHeight * targetAspectRatio);
+    }
   } else if (!isMobile) {
     // Desktop: fit within available area, up to 1280x720 or 1600x900 depending on width
     cssWidth = Math.min(1280, availableWidth);
