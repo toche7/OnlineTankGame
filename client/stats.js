@@ -111,10 +111,48 @@ function displayLeaderboard(tbodyId, players, type) {
     return;
   }
   
+  // Get the current sort attribute
+  const sortBy = document.getElementById('sortBy').value;
+  
+  // Calculate ranks considering ties
+  let currentRank = 1;
+  let previousValue = null;
+  
   players.forEach((player, index) => {
     const stats = player.stats;
     const kd = stats.deaths > 0 ? (stats.kills / stats.deaths).toFixed(2) : stats.kills.toFixed(2);
     const winRate = stats.gamesPlayed > 0 ? ((stats.wins / stats.gamesPlayed) * 100).toFixed(1) : '0.0';
+    
+    // Get the current player's value for the sorted attribute
+    let currentValue;
+    switch(sortBy) {
+      case 'wins':
+        currentValue = stats.wins;
+        break;
+      case 'gamesPlayed':
+        currentValue = stats.gamesPlayed;
+        break;
+      case 'kills':
+        currentValue = stats.kills;
+        break;
+      case 'deaths':
+        currentValue = stats.deaths;
+        break;
+      case 'kd':
+        currentValue = parseFloat(kd);
+        break;
+      case 'winRate':
+        currentValue = parseFloat(winRate);
+        break;
+      default:
+        currentValue = stats.wins;
+    }
+    
+    // Update rank if value changed from previous player
+    if (index > 0 && currentValue !== previousValue) {
+      currentRank = index + 1;
+    }
+    previousValue = currentValue;
     
     const row = document.createElement('tr');
     
@@ -123,11 +161,11 @@ function displayLeaderboard(tbodyId, players, type) {
       row.classList.add('highlight');
     }
     
-    // Add medal for top 3
-    let rankDisplay = index + 1;
-    if (index === 0) rankDisplay = '🥇 1';
-    else if (index === 1) rankDisplay = '🥈 2';
-    else if (index === 2) rankDisplay = '🥉 3';
+    // Add medal for top 3 ranks (not positions)
+    let rankDisplay = currentRank;
+    if (currentRank === 1) rankDisplay = '🥇 1';
+    else if (currentRank === 2) rankDisplay = '🥈 2';
+    else if (currentRank === 3) rankDisplay = '🥉 3';
     
     row.innerHTML = `
       <td>${rankDisplay}</td>

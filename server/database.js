@@ -533,24 +533,32 @@ async function getPlayerRankByType(playerId, sortBy = 'wins') {
     
     const isLoggedIn = !!playerCheck.rows[0].google_id;
     
+    // Use only the primary sort attribute for ranking to match client-side behavior
+    let rankBy;
     let orderBy;
     switch (sortBy) {
       case 'wins':
+        rankBy = 'wins DESC';
         orderBy = 'wins DESC, kills DESC, total_score DESC';
         break;
       case 'kills':
+        rankBy = 'kills DESC';
         orderBy = 'kills DESC, wins DESC, total_score DESC';
         break;
       case 'score':
+        rankBy = 'total_score DESC';
         orderBy = 'total_score DESC, wins DESC, kills DESC';
         break;
       case 'winRate':
+        rankBy = 'CASE WHEN games_played > 0 THEN CAST(wins AS FLOAT) / games_played ELSE 0 END DESC';
         orderBy = 'CASE WHEN games_played > 0 THEN CAST(wins AS FLOAT) / games_played ELSE 0 END DESC, wins DESC, kills DESC';
         break;
       case 'kd':
+        rankBy = 'CASE WHEN deaths > 0 THEN CAST(kills AS FLOAT) / deaths ELSE kills END DESC';
         orderBy = 'CASE WHEN deaths > 0 THEN CAST(kills AS FLOAT) / deaths ELSE kills END DESC, kills DESC, wins DESC';
         break;
       default:
+        rankBy = 'wins DESC';
         orderBy = 'wins DESC, kills DESC, total_score DESC';
     }
     
@@ -559,9 +567,10 @@ async function getPlayerRankByType(playerId, sortBy = 'wins') {
     
     const result = await client.query(`
       WITH ranked_players AS (
-        SELECT id, ROW_NUMBER() OVER (ORDER BY ${orderBy}) as rank
+        SELECT id, RANK() OVER (ORDER BY ${rankBy}) as rank
         FROM players
         WHERE games_played > 0 AND ${typeFilter}
+        ORDER BY ${orderBy}
       )
       SELECT rank FROM ranked_players WHERE id = $1
     `, [playerId]);
@@ -591,6 +600,15 @@ async function getPlayerMonthlyRank(playerId, sortBy = 'wins') {
       return null;
     }
     
+    // Use only the primary sort attribute for ranking to match client-side behavior
+    const validRanks = {
+      'wins': 'ms.wins DESC',
+      'kills': 'ms.kills DESC',
+      'score': 'ms.total_score DESC',
+      'winRate': 'CASE WHEN ms.games_played > 0 THEN CAST(ms.wins AS FLOAT) / ms.games_played ELSE 0 END DESC',
+      'kd': 'CASE WHEN ms.deaths > 0 THEN CAST(ms.kills AS FLOAT) / ms.deaths ELSE ms.kills END DESC'
+    };
+    
     const validSorts = {
       'wins': 'ms.wins DESC, ms.kills DESC, ms.total_score DESC',
       'kills': 'ms.kills DESC, ms.wins DESC, ms.total_score DESC',
@@ -599,14 +617,16 @@ async function getPlayerMonthlyRank(playerId, sortBy = 'wins') {
       'kd': 'CASE WHEN ms.deaths > 0 THEN CAST(ms.kills AS FLOAT) / ms.deaths ELSE ms.kills END DESC, ms.kills DESC, ms.wins DESC'
     };
     
+    const rankBy = validRanks[sortBy] || validRanks['wins'];
     const orderBy = validSorts[sortBy] || validSorts['wins'];
     
     const result = await client.query(`
       WITH ranked_players AS (
-        SELECT ms.player_id, ROW_NUMBER() OVER (ORDER BY ${orderBy}) as rank
+        SELECT ms.player_id, RANK() OVER (ORDER BY ${rankBy}) as rank
         FROM monthly_stats ms
         JOIN players p ON ms.player_id = p.id
         WHERE ms.month = $1 AND p.google_id IS NOT NULL AND ms.games_played > 0
+        ORDER BY ${orderBy}
       )
       SELECT rank FROM ranked_players WHERE player_id = $2
     `, [currentMonth, playerId]);
