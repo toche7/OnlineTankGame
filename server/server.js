@@ -2024,13 +2024,15 @@ io.on('connection', (socket) => {
       const sortBy = data.sortBy || 'wins';
       const loggedInLeaderboard = await db.getLoggedInLeaderboard(sortBy, 50);
       const guestLeaderboard = await db.getGuestLeaderboard(sortBy, 50);
+      const monthlyLeaderboard = await db.getMonthlyLeaderboard(sortBy, 50);
       socket.emit('leaderboards', {
         loggedIn: loggedInLeaderboard,
-        guest: guestLeaderboard
+        guest: guestLeaderboard,
+        monthly: monthlyLeaderboard
       });
     } catch (error) {
       console.error('Error getting leaderboard:', error);
-      socket.emit('leaderboards', { loggedIn: [], guest: [] });
+      socket.emit('leaderboards', { loggedIn: [], guest: [], monthly: [] });
     }
   });
 

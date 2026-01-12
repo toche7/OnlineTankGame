@@ -67,6 +67,24 @@ async function initDatabase() {
       )
     `);
 
+    // Create monthly_stats table for monthly leaderboard
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS monthly_stats (
+        id SERIAL PRIMARY KEY,
+        player_id VARCHAR(50) REFERENCES players(id) ON DELETE CASCADE,
+        month VARCHAR(7) NOT NULL,
+        games_played INTEGER DEFAULT 0,
+        wins INTEGER DEFAULT 0,
+        kills INTEGER DEFAULT 0,
+        deaths INTEGER DEFAULT 0,
+        total_score INTEGER DEFAULT 0,
+        highest_kills INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(player_id, month)
+      )
+    `);
+
     // Add new columns if they don't exist (for migration)
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE`);
     await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS email VARCHAR(255)`);
@@ -90,10 +108,54 @@ async function initDatabase() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_game_history_timestamp ON game_history(timestamp DESC)
     `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_monthly_stats_month ON monthly_stats(month)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_monthly_stats_player_month ON monthly_stats(player_id, month)
+    `);
 
     console.log('✅ Database tables initialized successfully');
   } catch (err) {
     console.error('❌ Database initialization error:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Get current month in YYYY-MM format
+function getCurrentMonth() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+// Update monthly stats for a player
+async function updateMonthlyStats(playerId, gameRecord) {
+  const client = await pool.connect();
+  try {
+    const currentMonth = getCurrentMonth();
+    const won = gameRecord.result === 'won' ? 1 : 0;
+    
+    // Upsert monthly stats
+    await client.query(`
+      INSERT INTO monthly_stats (
+        player_id, month, games_played, wins, kills, deaths, total_score, highest_kills, updated_at
+      ) VALUES ($1, $2, 1, $3, $4, $5, $6, $4, NOW())
+      ON CONFLICT (player_id, month)
+      DO UPDATE SET
+        games_played = monthly_stats.games_played + 1,
+        wins = monthly_stats.wins + $3,
+        kills = monthly_stats.kills + $4,
+        deaths = monthly_stats.deaths + $5,
+        total_score = monthly_stats.total_score + $6,
+        highest_kills = GREATEST(monthly_stats.highest_kills, $4),
+        updated_at = NOW()
+    `, [playerId, currentMonth, won, gameRecord.kills, gameRecord.deaths, gameRecord.score]);
+  } catch (err) {
+    console.error('Error updating monthly stats:', err);
     throw err;
   } finally {
     client.release();
@@ -129,6 +191,7 @@ async function getPlayer(playerId, username) {
       id: player.id,
       username: player.username,
       tankColor: player.tank_color,
+      isGoogle: !!player.google_id,
       stats: {
         gamesPlayed: player.games_played,
         wins: player.wins,
@@ -341,6 +404,62 @@ async function getGuestLeaderboard(sortBy = 'wins', limit = 50) {
   }
 }
 
+// Get monthly leaderboard for registered players
+async function getMonthlyLeaderboard(sortBy = 'wins', limit = 50) {
+  const client = await pool.connect();
+  try {
+    const currentMonth = getCurrentMonth();
+    const validSorts = {
+      'wins': 'ms.wins DESC, ms.kills DESC, ms.total_score DESC',
+      'kills': 'ms.kills DESC, ms.wins DESC, ms.total_score DESC',
+      'score': 'ms.total_score DESC, ms.wins DESC, ms.kills DESC',
+      'winRate': 'CASE WHEN ms.games_played > 0 THEN CAST(ms.wins AS FLOAT) / ms.games_played ELSE 0 END DESC, ms.wins DESC, ms.kills DESC',
+      'kd': 'CASE WHEN ms.deaths > 0 THEN CAST(ms.kills AS FLOAT) / ms.deaths ELSE ms.kills END DESC, ms.kills DESC, ms.wins DESC'
+    };
+    
+    const orderBy = validSorts[sortBy] || validSorts['wins'];
+    
+    const result = await client.query(`
+      SELECT 
+        p.id,
+        p.username,
+        p.tank_color,
+        ms.games_played,
+        ms.wins,
+        ms.kills,
+        ms.deaths,
+        ms.total_score,
+        ms.highest_kills
+      FROM monthly_stats ms
+      JOIN players p ON ms.player_id = p.id
+      WHERE ms.month = $1 AND p.google_id IS NOT NULL AND ms.games_played > 0
+      ORDER BY ${orderBy}
+      LIMIT $2
+    `, [currentMonth, limit]);
+    
+    return result.rows.map(player => ({
+      id: player.id,
+      username: player.username,
+      tankColor: player.tank_color,
+      isGoogle: true,
+      stats: {
+        gamesPlayed: player.games_played,
+        wins: player.wins,
+        kills: player.kills,
+        deaths: player.deaths,
+        totalScore: player.total_score,
+        highestKills: player.highest_kills,
+        lastPlayed: null
+      }
+    }));
+  } catch (err) {
+    console.error('Error in getMonthlyLeaderboard:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Get player rank
 async function getPlayerRank(playerId, sortBy = 'wins') {
   const client = await pool.connect();
@@ -442,6 +561,82 @@ async function getPlayerRankByType(playerId, sortBy = 'wins') {
   }
 }
 
+// Get player's monthly rank
+async function getPlayerMonthlyRank(playerId, sortBy = 'wins') {
+  const client = await pool.connect();
+  try {
+    const currentMonth = getCurrentMonth();
+    
+    // Check if player exists and is logged in
+    const playerCheck = await client.query(
+      'SELECT google_id FROM players WHERE id = $1',
+      [playerId]
+    );
+    
+    if (playerCheck.rows.length === 0 || !playerCheck.rows[0].google_id) {
+      return null;
+    }
+    
+    const validSorts = {
+      'wins': 'ms.wins DESC, ms.kills DESC, ms.total_score DESC',
+      'kills': 'ms.kills DESC, ms.wins DESC, ms.total_score DESC',
+      'score': 'ms.total_score DESC, ms.wins DESC, ms.kills DESC',
+      'winRate': 'CASE WHEN ms.games_played > 0 THEN CAST(ms.wins AS FLOAT) / ms.games_played ELSE 0 END DESC, ms.wins DESC, ms.kills DESC',
+      'kd': 'CASE WHEN ms.deaths > 0 THEN CAST(ms.kills AS FLOAT) / ms.deaths ELSE ms.kills END DESC, ms.kills DESC, ms.wins DESC'
+    };
+    
+    const orderBy = validSorts[sortBy] || validSorts['wins'];
+    
+    const result = await client.query(`
+      WITH ranked_players AS (
+        SELECT ms.player_id, ROW_NUMBER() OVER (ORDER BY ${orderBy}) as rank
+        FROM monthly_stats ms
+        JOIN players p ON ms.player_id = p.id
+        WHERE ms.month = $1 AND p.google_id IS NOT NULL AND ms.games_played > 0
+      )
+      SELECT rank FROM ranked_players WHERE player_id = $2
+    `, [currentMonth, playerId]);
+    
+    return result.rows.length > 0 ? result.rows[0].rank : null;
+  } catch (err) {
+    console.error('Error in getPlayerMonthlyRank:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Get player's monthly stats
+async function getPlayerMonthlyStats(playerId) {
+  const client = await pool.connect();
+  try {
+    const currentMonth = getCurrentMonth();
+    const result = await client.query(
+      'SELECT * FROM monthly_stats WHERE player_id = $1 AND month = $2',
+      [playerId, currentMonth]
+    );
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const row = result.rows[0];
+    return {
+      gamesPlayed: row.games_played,
+      wins: row.wins,
+      kills: row.kills,
+      deaths: row.deaths,
+      totalScore: row.total_score,
+      highestKills: row.highest_kills
+    };
+  } catch (err) {
+    console.error('Error in getPlayerMonthlyStats:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Save individual game record for a player
 async function saveGameRecord(playerId, gameRecord) {
   const client = await pool.connect();
@@ -473,6 +668,9 @@ async function saveGameRecord(playerId, gameRecord) {
       gameRecord.gameMode || 'multiplayer',
       gameRecord.reason || 'Game ended'
     ]);
+    
+    // Update monthly stats
+    await updateMonthlyStats(playerId, gameRecord);
     
     // Get player with updated info
     result = await client.query('SELECT * FROM players WHERE id = $1', [playerId]);
@@ -698,8 +896,11 @@ module.exports = {
   getLeaderboard,
   getLoggedInLeaderboard,
   getGuestLeaderboard,
+  getMonthlyLeaderboard,
   getPlayerRank,
   getPlayerRankByType,
+  getPlayerMonthlyRank,
+  getPlayerMonthlyStats,
   saveGameRecord,
   getLastGame,
   updatePlayerColor,

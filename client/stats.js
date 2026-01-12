@@ -78,23 +78,32 @@ socket.on('personalStats', (data) => {
   document.getElementById('yourWinRate').textContent = winRate + '%';
   
   if (data.rank) {
-    document.getElementById('rankValue').textContent = '#' + data.rank;
+    const rankType = data.isGoogle ? '(Registered Players)' : '(Guest Players)';
+    document.getElementById('rankValue').textContent = '#' + data.rank + ' ' + rankType;
   }
 });
 
 // Display both leaderboards
 socket.on('leaderboards', (data) => {
-  displayLeaderboard('loggedInLeaderboardBody', data.loggedIn || [], true);
-  displayLeaderboard('guestLeaderboardBody', data.guest || [], false);
+  displayLeaderboard('loggedInLeaderboardBody', data.loggedIn || [], 'registered');
+  displayLeaderboard('guestLeaderboardBody', data.guest || [], 'guest');
+  displayLeaderboard('monthlyLeaderboardBody', data.monthly || [], 'monthly');
 });
 
 // Helper function to display a leaderboard
-function displayLeaderboard(tbodyId, players, isLoggedIn) {
+function displayLeaderboard(tbodyId, players, type) {
   const tbody = document.getElementById(tbodyId);
   tbody.innerHTML = '';
   
   if (!players || players.length === 0) {
-    const message = isLoggedIn ? 'No registered players yet.' : 'No guest players yet.';
+    let message;
+    if (type === 'registered') {
+      message = 'No registered players yet.';
+    } else if (type === 'guest') {
+      message = 'No guest players yet.';
+    } else {
+      message = 'No monthly rankings yet. Play some games this month!';
+    }
     tbody.innerHTML = `<tr><td colspan="8" class="loading">${message}</td></tr>`;
     return;
   }
@@ -163,8 +172,17 @@ function setupTabs() {
       
       // Add active class to clicked button and corresponding tab
       button.classList.add('active');
-      const targetTab = tabName === 'loggedIn' ? 'loggedInTab' : 'guestTab';
-      document.getElementById(targetTab).classList.add('active');
+      let targetTab;
+      if (tabName === 'loggedIn') {
+        targetTab = 'loggedInTab';
+      } else if (tabName === 'guest') {
+        targetTab = 'guestTab';
+      } else if (tabName === 'monthly') {
+        targetTab = 'monthlyTab';
+      }
+      if (targetTab) {
+        document.getElementById(targetTab).classList.add('active');
+      }
     });
   });
 }
