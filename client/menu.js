@@ -418,9 +418,8 @@ function enableLobbyChat(code) {
   if (lobbyChatHint) lobbyChatHint.textContent = `Chatting in: ${code}`;
   const title = document.getElementById('chatTitle');
   if (title) title.textContent = `Lobby Chat (${code})`;
-  // focus input for convenience
+  // Remove auto-focus on joining lobby
   if (chatMessages) chatMessages.style.height = '160px';
-  if (chatInput) chatInput.focus();
 }
 
 function disableLobbyChat() {
@@ -442,7 +441,7 @@ function enableGlobalChat() {
   const title = document.getElementById('chatTitle');
   if (title) title.textContent = 'Main Chat Board';
   if (chatMessages) chatMessages.style.height = '320px';
-  if (chatInput) chatInput.focus();
+  // Remove auto-focus on page load
 }
 
 function disableGlobalChat() {
