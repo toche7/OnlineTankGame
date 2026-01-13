@@ -146,7 +146,8 @@ async function updateMonthlyStats(playerId, gameRecord) {
   const client = await pool.connect();
   try {
     const currentMonth = getCurrentMonth();
-    const won = gameRecord.result === 'won' ? 1 : 0;
+    // Fix: Check for 'win' instead of 'won' to match the value saved in saveGameRecord
+    const won = (gameRecord.result === 'win' || gameRecord.result === 'won') ? 1 : 0;
     
     // Upsert monthly stats
     await client.query(`
