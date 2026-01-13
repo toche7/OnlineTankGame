@@ -115,6 +115,22 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_monthly_stats_player_month ON monthly_stats(player_id, month)
     `);
 
+    // Create global_chat_messages table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS global_chat_messages (
+        id VARCHAR(50) PRIMARY KEY,
+        player_id VARCHAR(50),
+        player_name VARCHAR(100) NOT NULL,
+        message TEXT NOT NULL,
+        timestamp BIGINT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_chat_timestamp ON global_chat_messages(timestamp DESC)
+    `);
+
     console.log('✅ Database tables initialized successfully');
   } catch (err) {
     console.error('❌ Database initialization error:', err);
@@ -924,6 +940,121 @@ async function isUsernameTaken(username, excludePlayerId) {
   }
 }
 
+// Save global chat message to database
+async function saveGlobalChatMessage(messageId, playerId, playerName, message, timestamp) {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      'INSERT INTO global_chat_messages (id, player_id, player_name, message, timestamp) VALUES ($1, $2, $3, $4, $5)',
+      [messageId, playerId, playerName, message, timestamp]
+    );
+  } catch (err) {
+    console.error('Error saving chat message:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Get recent global chat messages (limit to most recent N messages)
+async function getGlobalChatHistory(limit = 200) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      'SELECT id, player_id AS "playerId", player_name AS "playerName", message, timestamp FROM global_chat_messages ORDER BY timestamp DESC LIMIT $1',
+      [limit]
+    );
+    // Return in chronological order (oldest first)
+    return result.rows.reverse();
+  } catch (err) {
+    console.error('Error loading chat history:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Delete a global chat message by ID
+async function deleteGlobalChatMessage(messageId) {
+  const client = await pool.connect();
+  try {
+    await client.query('DELETE FROM global_chat_messages WHERE id = $1', [messageId]);
+  } catch (err) {
+    console.error('Error deleting chat message:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Clean up old chat messages (keep only recent N messages)
+async function cleanOldChatMessages(keepLimit = 200) {
+  const client = await pool.connect();
+  try {
+    // Delete messages beyond the limit
+    await client.query(`
+      DELETE FROM global_chat_messages
+      WHERE id NOT IN (
+        SELECT id FROM global_chat_messages
+        ORDER BY timestamp DESC
+        LIMIT $1
+      )
+    `, [keepLimit]);
+  } catch (err) {
+    console.error('Error cleaning old chat messages:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Save global chat message to database
+async function saveGlobalChatMessage(messageId, playerId, playerName, message, timestamp) {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      'INSERT INTO global_chat_messages (id, player_id, player_name, message, timestamp) VALUES ($1, $2, $3, $4, $5)',
+      [messageId, playerId, playerName, message, timestamp]
+    );
+  } catch (err) {
+    console.error('Error saving chat message:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Get recent global chat messages (limit to most recent N messages)
+async function getGlobalChatHistory(limit = 200) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      'SELECT id, player_id AS "playerId", player_name AS "playerName", message, timestamp FROM global_chat_messages ORDER BY timestamp DESC LIMIT $1',
+      [limit]
+    );
+    // Return in chronological order (oldest first)
+    return result.rows.reverse();
+  } catch (err) {
+    console.error('Error loading chat history:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Delete a global chat message by ID
+async function deleteGlobalChatMessage(messageId) {
+  const client = await pool.connect();
+  try {
+    await client.query('DELETE FROM global_chat_messages WHERE id = $1', [messageId]);
+  } catch (err) {
+    console.error('Error deleting chat message:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   initDatabase,
   getPlayer,
@@ -944,6 +1075,11 @@ module.exports = {
   createPlayer,
   updatePlayerUsername,
   isUsernameTaken,
+  // Global chat functions
+  saveGlobalChatMessage,
+  getGlobalChatHistory,
+  deleteGlobalChatMessage,
+  cleanOldChatMessages,
   // raw access for server-side checks
   getPlayerRaw,
   closePool

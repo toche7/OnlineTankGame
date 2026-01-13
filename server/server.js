@@ -84,6 +84,7 @@ setupAuth();
 (async () => {
   try {
     await db.initDatabase();
+    await loadChatHistory(); // Load chat messages from database
   } catch (err) {
     console.error('Failed to initialize database:', err);
     process.exit(1);
@@ -149,7 +150,27 @@ const lobbies = {}; // { gameCode: { players: {}, host: socketId, state: 'waitin
 
 // Global chat history (keeps recent messages for new clients)
 const GLOBAL_CHAT_HISTORY_LIMIT = 200;
-const globalChatHistory = [];
+let globalChatHistory = [];
+
+// Load chat history from database on startup
+async function loadChatHistory() {
+  try {
+    globalChatHistory = await db.getGlobalChatHistory(GLOBAL_CHAT_HISTORY_LIMIT);
+    console.log(`✅ Loaded ${globalChatHistory.length} chat messages from database`);
+  } catch (err) {
+    console.error('❌ Failed to load chat history:', err);
+    globalChatHistory = [];
+  }
+}
+
+// Clean old chat messages periodically (every 30 minutes)
+setInterval(async () => {
+  try {
+    await db.cleanOldChatMessages(GLOBAL_CHAT_HISTORY_LIMIT);
+  } catch (err) {
+    console.error('Error cleaning old chat messages:', err);
+  }
+}, 30 * 60 * 1000);
 
 // AI Controller class
 class AIController {
@@ -1514,7 +1535,7 @@ io.on('connection', (socket) => {
   });
 
   // Global chat: broadcast messages to everyone (menu-level)
-  socket.on('globalChatMessage', (data) => {
+  socket.on('globalChatMessage', async (data) => {
     try {
       const message = String((data && data.message) || '').trim().slice(0, 500);
       if (!message) return;
@@ -1524,11 +1545,15 @@ io.on('connection', (socket) => {
 
       // Broadcast to all connected clients
       const entry = { id: genMessageId(), playerName, message, timestamp: Date.now(), playerId: data && data.playerId ? data.playerId : (socket.persistentPlayerId || socket.id) };
-      // Save to global history
+      // Save to global history (in-memory)
       try {
         globalChatHistory.push(entry);
         if (globalChatHistory.length > GLOBAL_CHAT_HISTORY_LIMIT) globalChatHistory.shift();
       } catch (err) { console.error('Failed to save global chat history', err); }
+      // Save to database
+      try {
+        await db.saveGlobalChatMessage(entry.id, entry.playerId, entry.playerName, entry.message, entry.timestamp);
+      } catch (err) { console.error('Failed to save chat message to database:', err); }
 
       // Emit only to sockets that are NOT currently inside a lobby (no socket.gameCode)
       try {
@@ -1548,16 +1573,20 @@ io.on('connection', (socket) => {
   });
 
   // Delete chat message (global or lobby) - anyone may request deletion
-  socket.on('deleteChatMessage', (data) => {
+  socket.on('deleteChatMessage', async (data) => {
     try {
       if (!data || !data.id || !data.scope) return;
       const id = String(data.id);
       const scope = data.scope; // 'global' or 'lobby'
 
       if (scope === 'global') {
-        // remove from global history
+        // remove from global history (in-memory)
         const idx = globalChatHistory.findIndex(m => m.id === id);
         if (idx !== -1) {
+          // Delete from database
+          try {
+            await db.deleteGlobalChatMessage(id);
+          } catch (err) { console.error('Failed to delete chat message from database:', err); }
           globalChatHistory.splice(idx, 1);
         }
         // notify menu clients (not in lobbies)
