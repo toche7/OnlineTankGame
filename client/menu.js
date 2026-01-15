@@ -278,9 +278,222 @@ function loadLastGameSettings() {
   }
 }
 
+// Tab switching functionality
+function initTabSwitching() {
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const onlineSection = document.getElementById('onlinePlaySection');
+  const singlePlayerSection = document.getElementById('singlePlayerSection');
+  
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Update active tab button
+      tabButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      const tab = btn.getAttribute('data-tab');
+      if (tab === 'singleplayer') {
+        // Show single player, hide online
+        if (onlineSection) onlineSection.classList.add('hidden');
+        if (singlePlayerSection) singlePlayerSection.classList.remove('hidden');
+      } else {
+        // Show online, hide single player
+        if (singlePlayerSection) singlePlayerSection.classList.add('hidden');
+        if (onlineSection) onlineSection.classList.remove('hidden');
+      }
+    });
+  });
+}
+
+// Single player mode handlers
+function initSinglePlayerModes() {
+  const modeCards = document.querySelectorAll('.sp-mode-card');
+  
+  modeCards.forEach(card => {
+    const btn = card.querySelector('.btn');
+    if (!btn) return;
+    
+    btn.addEventListener('click', () => {
+      const mode = card.getAttribute('data-mode');
+      handleSinglePlayerMode(mode);
+    });
+  });
+}
+
+function handleSinglePlayerMode(mode) {
+  console.log('Single player mode selected:', mode);
+  
+  // For campaign mode, show campaign selection first
+  if (mode === 'targetpractice') {
+    showCampaignSelectionModal();
+  } else {
+    // For other modes, show difficulty selection
+    showDifficultyModal(mode);
+  }
+}
+
+function showCampaignSelectionModal() {
+  // Load campaign progress from localStorage
+  let unlockedCampaigns = ['thai-cambodia']; // First campaign always unlocked
+  try {
+    const progress = localStorage.getItem('targetPracticeProgress');
+    if (progress) {
+      const data = JSON.parse(progress);
+      // Check each campaign ID from the saved progress
+      Object.keys(data).forEach(campaignId => {
+        if (data[campaignId] === true && !unlockedCampaigns.includes(campaignId)) {
+          unlockedCampaigns.push(campaignId);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error loading campaign progress:', error);
+  }
+
+  // Campaign data with translations
+  const campaigns = [
+    {
+      id: 'thai-cambodia',
+      name: langManager.t('campaignThaiCambodia'),
+      description: langManager.t('campaignThaiCambodiaDesc'),
+      color: '#2E7D32'
+    },
+    {
+      id: 'thai-laos',
+      name: langManager.t('campaignThaiLaos'),
+      description: langManager.t('campaignThaiLaosDesc'),
+      color: '#1565C0'
+    },
+    {
+      id: 'thai-myanmar',
+      name: langManager.t('campaignThaiMyanmar'),
+      description: langManager.t('campaignThaiMyanmarDesc'),
+      color: '#6A1B9A'
+    },
+    {
+      id: 'thai-malaysia',
+      name: langManager.t('campaignThaiMalaysia'),
+      description: langManager.t('campaignThaiMalaysiaDesc'),
+      color: '#D32F2F'
+    }
+  ];
+
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.style.display = 'flex';
+  
+  const content = document.createElement('div');
+  content.className = 'modal-content';
+  content.style.maxWidth = '600px';
+  
+  let campaignHTML = `<h3>${langManager.t('selectCampaign')}</h3><div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0;">`;
+  
+  campaigns.forEach(campaign => {
+    const isUnlocked = unlockedCampaigns.includes(campaign.id);
+    const lockIcon = isUnlocked ? '' : '🔒 ';
+    const disabledClass = isUnlocked ? '' : 'disabled';
+    const opacity = isUnlocked ? '1' : '0.5';
+    
+    campaignHTML += `
+      <button class="btn btn-primary campaign-btn ${disabledClass}" 
+              data-campaign="${campaign.id}" 
+              style="background: linear-gradient(135deg, ${campaign.color} 0%, ${campaign.color}dd 100%); 
+                     opacity: ${opacity}; 
+                     padding: 15px; 
+                     text-align: left;
+                     position: relative;"
+              ${isUnlocked ? '' : 'disabled'}>
+        <div style="font-weight: bold; margin-bottom: 5px;">${lockIcon}${campaign.name}</div>
+        <div style="font-size: 0.85em; opacity: 0.9;">${campaign.description}</div>
+      </button>
+    `;
+  });
+  
+  campaignHTML += '</div><button class="btn btn-secondary" id="cancelCampaignBtn">Cancel</button>';
+  content.innerHTML = campaignHTML;
+  
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+  
+  // Handle campaign selection
+  content.querySelectorAll('.campaign-btn:not(.disabled)').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const campaignId = btn.getAttribute('data-campaign');
+      document.body.removeChild(modal);
+      // After selecting campaign, show difficulty modal
+      showDifficultyModal('targetpractice', campaignId);
+    });
+  });
+  
+  // Handle cancel
+  document.getElementById('cancelCampaignBtn').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+}
+
+function showDifficultyModal(mode, campaign = null) {
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.style.display = 'flex';
+  
+  const content = document.createElement('div');
+  content.className = 'modal-content';
+  content.innerHTML = `
+    <h3>Select Difficulty</h3>
+    <div style="display: flex; flex-direction: column; gap: 15px; margin: 20px 0;">
+      <button class="btn btn-primary" data-difficulty="easy">😊 Easy</button>
+      <button class="btn btn-primary" data-difficulty="normal">😐 Normal</button>
+      <button class="btn btn-primary" data-difficulty="hard">😰 Hard</button>
+    </div>
+    <button class="btn btn-secondary" id="cancelDifficultyBtn">Cancel</button>
+  `;
+  
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+  
+  // Handle difficulty selection
+  content.querySelectorAll('[data-difficulty]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const difficulty = btn.getAttribute('data-difficulty');
+      launchSinglePlayer(mode, difficulty, campaign);
+      document.body.removeChild(modal);
+    });
+  });
+  
+  // Handle cancel
+  document.getElementById('cancelDifficultyBtn').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+}
+
+function launchSinglePlayer(mode, difficulty, campaign = null) {
+  // Generate a unique game code for single player
+  const spCode = 'SP_' + Date.now();
+  
+  // Navigate to game with single player parameters
+  const params = new URLSearchParams({
+    code: spCode,
+    sp: 'true',
+    mode: mode,
+    difficulty: difficulty
+  });
+  
+  // Add campaign parameter if provided (for targetpractice mode)
+  if (campaign) {
+    params.append('campaign', campaign);
+  }
+  
+  window.location.href = `/game.html?${params.toString()}`;
+}
+
 // Check if returning from a finished game and auto-rejoin
 window.addEventListener('DOMContentLoaded', () => {
   updateUsernameDisplay();
+  
+  // Initialize tab switching
+  initTabSwitching();
+  
+  // Initialize single player modes
+  initSinglePlayerModes();
   
   // Fetch game version
   fetch('/api/version')

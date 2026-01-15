@@ -10,14 +10,13 @@ A real-time multiplayer tank battle game built with Node.js, Socket.IO, PostgreS
 ## 🎯 Features
 
 ### Game Modes
-- **Multiplayer Only**: Classic free-for-all PvP with 2-10 players
-- **Team vs Team (PvP)**: 2 teams battle for supremacy
-  - Team A (⚡) vs Team B (🛡️)
-  - Dynamic team selection in lobby
-  - Team-based win conditions
-- **Solo vs AI Bots**: Practice against AI opponents (1-9 bots)
-- **Co-op vs AI Bots**: Team up with friends against AI enemies
-- **Multiplayer + AI Fill**: Mix of human players and AI bots
+### Game Modes
+- **Survival (ai_solo)**: Single-player mode where you face AI bots (1-9 bots). Recommended when playing alone.
+- **Co-op vs AI (ai_coop)**: Team up with friends against AI-controlled enemies.
+- **Multiplayer Only (multiplayer)**: Free-for-all PvP matches. Requires at least 2 players to start; supports up to 10 players.
+- **Team vs Team (team_pvp)**: Two teams (Team A and Team B) compete; host and lobby enforce at least one player per team before starting.
+
+Note: the client UI exposes these four modes (`ai_solo`, `ai_coop`, `multiplayer`, `team_pvp`). "Multiplayer + AI Fill" behavior is not currently implemented as a dedicated mode — AI bots spawn only for the AI-focused modes (`ai_solo`, `ai_coop`).
 
 ### Gameplay
 - **Real-time Multiplayer**: Up to 10 players can battle simultaneously
@@ -229,6 +228,10 @@ OnlineTankGame/
   - PostgreSQL (production)
   - JSON fallback (development)
 
+## 🏗️ Architecture Overview
+
+Cannon Clash follows a client–server realtime architecture. The backend (`server/server.js`) runs an Express + Socket.IO server that manages lobbies, match lifecycle, the main game loop, AI controllers, and chat persistence. Persistent player data and leaderboards are managed by `server/database.js` which initializes PostgreSQL tables and falls back to `data/players.json` when `DATABASE_URL` is not configured. Game-specific constants and helper functions live under `server/game/` (`server/game/constants.js`, `server/game/helpers.js`). The frontend resides in `client/` — `client/menu.js` and `client/game.js` provide lobby and gameplay logic, rendering on an HTML5 Canvas while the Socket.IO client keeps gameplay in sync.
+
 ## 🎯 Game Mechanics
 
 ### Tank Properties
@@ -260,6 +263,13 @@ npm run dev
 ```
 This uses `nodemon` for automatic server restarts on file changes.
 
+### Developer Notes
+
+- Lint server code: `npm run lint` (runs `eslint server/**/*.js`).
+- Format server files: `npm run format` (runs `prettier --write server/**/*.js`).
+- Recommended: move `nodemon` to `devDependencies` so production installs don't include it; update `package.json` and run `npm install` after making changes.
+
+
 ### Configuration
 
 Key constants in [server/server.js](server/server.js):
@@ -270,12 +280,22 @@ Key constants in [server/server.js](server/server.js):
 
 ### Environment Variables
 
-Create a `.env` file in the project root:
-```env
-DATABASE_URL=postgresql://username:password@host:port/database
-NODE_ENV=development  # or production
-PORT=3000  # optional, defaults to 3000
-```
+Create a `.env` file in the project root (or copy `.env.sample` and fill in real values). Minimum recommended variables:
+
+- `DATABASE_URL` — PostgreSQL connection string (optional for local development). Example: `postgresql://user:pass@localhost:5432/cannon_clash`. See [DATABASE_SETUP.md](DATABASE_SETUP.md) and [server/database.js](server/database.js).
+- `SESSION_SECRET` — long random secret required in production (do NOT commit this value).
+- `NODE_ENV` — `development` or `production` (defaults to `development` if not set).
+- `PORT` — optional server port (defaults to `3000`).
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — required only if using Google OAuth (see [server/middleware/auth.js](server/middleware/auth.js)).
+
+For convenience a sample file is provided at `.env.sample` (copy it to `.env` and update the values).
+
+Example minimal contents (single-line values):
+
+DATABASE_URL=postgresql://username:password@localhost:5432/cannon_clash
+SESSION_SECRET=replace-with-a-long-random-string
+NODE_ENV=development
+PORT=3000
 
 ## 🚀 Deployment
 
@@ -399,6 +419,16 @@ Potential features for future versions:
 ## 📧 Contact
 
 For questions or feedback, please open an issue on GitHub.
+
+---
+
+## 🟢 Game Status
+
+- **Backend:** Express + Socket.IO server is implemented in `server/server.js`. Database access is handled by `server/database.js` with PostgreSQL as the primary store and `data/players.json` as a local fallback. Authentication (Passport) and session management are configured. API routes live under `server/routes/`.
+- **Frontend:** Core client pages exist in the `client/` folder (`menu.html`, `game.html`, `stats.html`) and the primary client logic is in `client/game.js` and related client scripts. Rendering uses HTML5 Canvas.
+- **Core Features Implemented:** Lobby/matchmaking with 6-character game codes, real-time multiplayer sync, AI bots with three difficulty levels, power-ups and weapons, scoreboard, persistent player stats, and basic chat history persistence.
+- **Running Locally:** Start with `npm install` then `npm start` (or `npm run dev` for nodemon). Server defaults to port 3000.
+- **Known Gaps / Next Work:** No automated tests are included; mobile/touch controls and a replay system are not yet implemented; performance scaling (horizontal scaling, Redis for pub/sub) and ranking/ELO are future enhancements.
 
 ---
 

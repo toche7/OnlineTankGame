@@ -11,13 +11,39 @@ const translations = {
     lastGame: "เกมล่าสุด",
     
     // Menu Sections
-    gameBrowser: "เลือกเกม",
+    singlePlayer: "เกมผู้เล่นคนเดียว",
+    singlePlayerMode: "โหมดผู้เล่นเดียว",
+    onlinePlay: "🌐 เกมผู้เล่นหลายคน",
+    multiplayer: "เกมผู้เล่นหลายคน",
     lobby: "ล็อบบี้",
     gameCode: "รหัสเกม",
     players: "ผู้เล่น",
     playersList: "รายชื่อผู้เล่น",
     playersInLobby: "ผู้เล่นในล็อบบี้",
     waitingRoom: "ห้องรอ",
+    
+    // Single Player Modes
+    training: "การฝึกอบรม",
+    trainingDesc: "เรียนรู้พื้นฐานและฝึกฝนทักษะของคุณ",
+    timeAttack: "โหมดจับเวลา",
+    timeAttackDesc: "ทำลายเป้าหมายให้เร็วที่สุด",
+    targetPractice: "เกมแคมเปญ",
+    targetPracticeDesc: "พัฒนาความแม่นยำในการยิง",
+    bossRush: "ต่อสู้บอส",
+    bossRushDesc: "เผชิญหน้ากับรถถังบอสที่แข็งแกร่ง",
+    play: "เล่น",
+    comingSoon: "โหมดผู้เล่นเดียวเพิ่มเติมเร็วๆ นี้!",
+    
+    // Campaign Names
+    selectCampaign: "เลือกแคมเปญ",
+    campaignThaiCambodia: "🇹🇭 ชายแดนไทย-กัมพูชา",
+    campaignThaiCambodiaDesc: "ป้องกันชายแดนทางทิศตะวันออก",
+    campaignThaiLaos: "🇹🇭 ชายแดนไทย-ลาว",
+    campaignThaiLaosDesc: "ป้องกันชายแดนทางทิศเหนือ",
+    campaignThaiMyanmar: "🇹🇭 ชายแดนไทย-พม่า",
+    campaignThaiMyanmarDesc: "ป้องกันชายแดนทางทิศตะวันตก",
+    campaignThaiMalaysia: "🇹🇭 ชายแดนไทย-มาเลเซีย",
+    campaignThaiMalaysiaDesc: "ป้องกันชายแดนทางทิศใต้",
     
     // Tank Color
     chooseTankColor: "🎨 เลือกสีรถถัง",
@@ -136,13 +162,39 @@ const translations = {
     lastGame: "Last Game",
     
     // Menu Sections
-    gameBrowser: "Game Browser",
+    singlePlayer: "🎮 Single Player",
+    singlePlayerMode: "Single Player Mode",
+    onlinePlay: "🌐 Multiplayer Game",
+    multiplayer: "Multiplayer",
     lobby: "Lobby",
     gameCode: "Game Code",
     players: "Players",
-    playersList: "Players",
+    playersList: "Players:",
     playersInLobby: "Players in Lobby",
     waitingRoom: "Waiting Room",
+    
+    // Single Player Modes
+    training: "Training",
+    trainingDesc: "Learn the basics and practice your skills",
+    timeAttack: "Time Attack",
+    timeAttackDesc: "Destroy targets as fast as possible",
+    targetPractice: "Campaign Game",
+    targetPracticeDesc: "Improve your aim and accuracy",
+    bossRush: "Boss Rush",
+    bossRushDesc: "Face powerful boss tanks in sequence",
+    play: "Play",
+    comingSoon: "More single player modes coming soon!",
+    
+    // Campaign Names
+    selectCampaign: "Select Campaign",
+    campaignThaiCambodia: "🇹🇭 Thailand-Cambodia Border",
+    campaignThaiCambodiaDesc: "Defense at the eastern border",
+    campaignThaiLaos: "🇹🇭 Thailand-Laos Border",
+    campaignThaiLaosDesc: "Defense at the northern border",
+    campaignThaiMyanmar: "🇹🇭 Thailand-Myanmar Border",
+    campaignThaiMyanmarDesc: "Defense at the western border",
+    campaignThaiMalaysia: "🇹🇭 Thailand-Malaysia Border",
+    campaignThaiMalaysiaDesc: "Defense at the southern border",
     
     // Tank Color
     chooseTankColor: "🎨 Choose Your Tank Color",

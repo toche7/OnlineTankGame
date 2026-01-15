@@ -309,8 +309,9 @@ class AIController {
     moveY += (Math.random() - 0.5) * noise;
     
     // Apply speed
-    const speedMultiplier = lobby.tankSpeed || TANK_SPEED;
-    const speed = TANK_SPEED * (speedMultiplier / TANK_SPEED);
+    const speedMultiplier = lobby.tankSpeed ? (lobby.tankSpeed / TANK_SPEED) : 1;
+    const baseSpeed = 3; // Base movement speed matching player input
+    const speed = baseSpeed * speedMultiplier;
     
     // Check for obstacles in path and avoid
     const avoidance = this.avoidObstacles(aiTank, moveX, moveY, lobby.gameObstacles);
@@ -349,8 +350,9 @@ class AIController {
         moveX = avoidance.x;
         moveY = avoidance.y;
         
-        const speedMultiplier = lobby.tankSpeed || TANK_SPEED;
-        const speed = TANK_SPEED * (speedMultiplier / TANK_SPEED);
+        const speedMultiplier = lobby.tankSpeed ? (lobby.tankSpeed / TANK_SPEED) : 1;
+        const baseSpeed = 3; // Base movement speed matching player input
+        const speed = baseSpeed * speedMultiplier;
         
         aiTank.velocityX = moveX * speed;
         aiTank.velocityY = moveY * speed;
@@ -382,8 +384,9 @@ class AIController {
     moveX = avoidance.x;
     moveY = avoidance.y;
     
-    const speedMultiplier = lobby.tankSpeed || TANK_SPEED;
-    const speed = TANK_SPEED * (speedMultiplier / TANK_SPEED);
+    const speedMultiplier = lobby.tankSpeed ? (lobby.tankSpeed / TANK_SPEED) : 1;
+    const baseSpeed = 3; // Base movement speed matching player input
+    const speed = baseSpeed * speedMultiplier;
     
     aiTank.velocityX = moveX * speed;
     aiTank.velocityY = moveY * speed;

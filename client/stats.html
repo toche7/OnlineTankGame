@@ -14,6 +14,15 @@
       <a href="#" id="backToLobby" class="btn btn-secondary">← Back to Lobby</a>
     </div>
     
+    <!-- Game Mode Tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab-btn active" data-mode="online">🌐 Online Play</button>
+      <button class="mode-tab-btn" data-mode="singleplayer">🎮 Single Player</button>
+    </div>
+    
+    <!-- Online Stats Section -->
+    <div class="mode-section active" id="onlineSection">
+    
     <!-- Personal Stats -->
     <div class="stats-section">
       <h2>Your Statistics</h2>
@@ -171,6 +180,121 @@
         </div>
       </div>
     </div>
+    
+    </div>
+    <!-- End Online Section -->
+    
+    <!-- Single Player Stats Section -->
+    <div class="mode-section" id="singleplayerSection">
+    
+    <!-- Single Player Personal Stats -->
+    <div class="stats-section">
+      <h2>Your Single Player Statistics</h2>
+      <div id="spPersonalStats" class="personal-stats">
+        <div class="stat-card">
+          <div class="stat-value" id="spTotalGames">0</div>
+          <div class="stat-label">Games Played</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="spWins">0</div>
+          <div class="stat-label">Wins</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="spTotalKills">0</div>
+          <div class="stat-label">Total Kills</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="spTotalScore">0</div>
+          <div class="stat-label">Total Score</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="spBestScore">0</div>
+          <div class="stat-label">Best Score</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="spWinRate">0%</div>
+          <div class="stat-label">Win Rate</div>
+        </div>
+      </div>
+      
+      <!-- Mode Breakdown -->
+      <div class="mode-breakdown">
+        <h3>📊 Mode Breakdown</h3>
+        <div class="mode-stats">
+          <div class="mode-stat-card">
+            <div class="mode-icon">🎓</div>
+            <div class="mode-name">Training</div>
+            <div class="mode-value" id="spTrainingGames">0 games</div>
+          </div>
+          <div class="mode-stat-card">
+            <div class="mode-icon">⏱️</div>
+            <div class="mode-name">Time Attack</div>
+            <div class="mode-value" id="spTimeAttackGames">0 games</div>
+            <div class="mode-extra" id="spBestTimeAttack">-</div>
+          </div>
+          <div class="mode-stat-card">
+            <div class="mode-icon">🎯</div>
+            <div class="mode-name">Campaign</div>
+            <div class="mode-value" id="spCampaignGames">0 games</div>
+            <div class="mode-extra" id="spCampaignsWon">0 won</div>
+          </div>
+          <div class="mode-stat-card">
+            <div class="mode-icon">👹</div>
+            <div class="mode-name">Boss Rush</div>
+            <div class="mode-value" id="spBossRushGames">0 games</div>
+            <div class="mode-extra" id="spBestBossRush">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Single Player Leaderboard -->
+    <div class="leaderboard-section">
+      <h2>🏆 Single Player Leaderboard</h2>
+      
+      <div class="sort-controls">
+        <label for="spModeFilter">Mode:</label>
+        <select id="spModeFilter">
+          <option value="">All Modes</option>
+          <option value="training">Training</option>
+          <option value="timeattack">Time Attack</option>
+          <option value="targetpractice">Campaign</option>
+          <option value="bossrush">Boss Rush</option>
+        </select>
+        <label for="spSortBy">Sort by:</label>
+        <select id="spSortBy">
+          <option value="wins">Most Wins</option>
+          <option value="score">Highest Score</option>
+          <option value="time">Best Time</option>
+        </select>
+        <button id="spRefreshBtn" class="btn btn-small">🔄 Refresh</button>
+      </div>
+      
+      <div class="leaderboard-table">
+        <table id="spLeaderboard">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Player</th>
+              <th>Wins</th>
+              <th>Games</th>
+              <th>Best Score</th>
+              <th>Best Time</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody id="spLeaderboardBody">
+            <tr>
+              <td colspan="7" class="loading">Loading...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    </div>
+    <!-- End Single Player Section -->
+    
   </div>
   
   <script src="/socket.io/socket.io.js"></script>

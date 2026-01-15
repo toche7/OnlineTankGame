@@ -7,11 +7,36 @@ const urlParams = new URLSearchParams(window.location.search);
 const gameCode = urlParams.get('code');
 const wasHost = urlParams.get('wasHost') === 'true';
 const isSpectator = urlParams.get('spectator') === 'true';
+const isSinglePlayer = urlParams.get('sp') === 'true';
+const spMode = urlParams.get('mode') || 'training';
+const spDifficulty = urlParams.get('difficulty') || 'normal';
+const spCampaign = urlParams.get('campaign') || 'thai-cambodia';
 
 // Redirect to menu if no game code
 if (!gameCode) {
   window.location.href = '/menu.html';
 }
+
+// Single player state
+let singlePlayerState = {
+  mode: spMode,
+  difficulty: spDifficulty,
+  campaign: spCampaign,
+  startTime: null,
+  targets: [],
+  targetCount: 0,
+  hits: 0,
+  misses: 0,
+  shotsRemaining: 30,
+  enemiesDestroyed: 0,
+  bossesDefeated: 0,
+  currentWave: 0,
+  completed: false,
+  bossHealth: 0,
+  maxBossHealth: 0,
+  aiTanks: [],
+  nextWaveTime: 0
+};
 
 let gameState = {
   playerId: null,
@@ -389,7 +414,18 @@ function initFireButton() {
   function handleFire() {
     if (gameState.countdownActive || gameState.gameFinished || isSpectator) return;
     playShootSound();
-    socket.emit('shoot', {});
+    
+    if (isSinglePlayer && singlePlayerManager) {
+      const angle = touchControls.aimLastAngle || 0;
+      singlePlayerManager.handlePlayerShoot(angle);
+    } else {
+      // For online mode, ensure turret is rotated to aim angle before shooting
+      const angle = touchControls.aimLastAngle;
+      if (angle !== null && angle !== undefined) {
+        socket.emit('rotate', { rotation: angle });
+      }
+      socket.emit('shoot', {});
+    }
   }
 
   fireButton.addEventListener('touchstart', (e) => {
@@ -490,7 +526,16 @@ function initAimJoystick() {
     // Calculate angle and emit rotate
     const angle = Math.atan2(dy, dx);
     touchControls.aimLastAngle = angle;
-    socket.emit('rotate', { rotation: angle });
+    
+    if (isSinglePlayer && singlePlayerManager) {
+      // In single player, update player turret rotation directly
+      const playerTank = gameState.players[gameState.playerId];
+      if (playerTank) {
+        playerTank.turretRotation = angle;
+      }
+    } else {
+      socket.emit('rotate', { rotation: angle });
+    }
 
     // If pushed outward enough, fire
     if (dist > 18) {
@@ -498,7 +543,11 @@ function initAimJoystick() {
       const fireInterval = 150; // Faster fire rate for touch controls
       if (!touchControls.aimLastFire || now - touchControls.aimLastFire > fireInterval) {
         playShootSound();
-        socket.emit('shoot', {});
+        if (isSinglePlayer && singlePlayerManager) {
+          singlePlayerManager.handlePlayerShoot(angle);
+        } else {
+          socket.emit('shoot', {});
+        }
         touchControls.aimLastFire = now;
       }
     }
@@ -560,17 +609,21 @@ socket.on('connect', async () => {
     }
   }
   
-  socket.emit('initGame', { 
-    gameCode: gameCode, 
-    wasHost: wasHost,
-    playerId: persistentPlayerId,
-    username: username,
-    spectator: isSpectator
-  });
+  // Only emit initGame for multiplayer - single player is already initialized
+  if (!isSinglePlayer) {
+    socket.emit('initGame', { 
+      gameCode: gameCode, 
+      wasHost: wasHost,
+      playerId: persistentPlayerId,
+      username: username,
+      spectator: isSpectator
+    });
+  }
 });
 
 // Handle redirect to menu if game not valid
 socket.on('redirectToMenu', () => {
+  if (isSinglePlayer) return; // Skip for single player
   alert('Game session not found or has not started yet.');
   window.location.href = '/menu.html';
 });
@@ -742,8 +795,59 @@ class Explosion {
   }
 }
 
-// Socket events
+// Single Player Manager
+let singlePlayerManager = null;
+
+if (isSinglePlayer) {
+  // Don't connect to socket for single player - initialize locally
+  console.log('Single Player Mode:', spMode, 'Difficulty:', spDifficulty);
+  
+  // Set up player ID
+  gameState.playerId = persistentPlayerId;
+  
+  // Fetch username from server
+  fetch(`/api/player/${persistentPlayerId}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.success && data.player) {
+        username = data.player.username;
+        localStorage.setItem('tankGameUsername', username);
+        console.log('Player username:', username);
+      }
+    })
+    .catch(err => {
+      console.error('Error fetching player data:', err);
+      username = 'Player';
+    });
+  
+  // Initialize game state for single player
+  gameState.gameWidth = 1067;
+  gameState.gameHeight = 600;
+  gameState.obstacles = [];
+  gameState.weapons = [];
+  gameState.powerups = [];
+  gameState.projectiles = [];
+  gameState.explosions = [];
+  gameState.players = {};
+  
+  singlePlayerManager = new SinglePlayerManager(gameState, singlePlayerState, canvas, ctx);
+  
+  // Initialize single player game after a short delay
+  setTimeout(() => {
+    singlePlayerManager.init();
+    gameState.gameStartTime = Date.now();
+    gameState.gameDuration = 600000; // 10 minutes default
+    startBackgroundMusic();
+  }, 500);
+} else {
+  // Only connect to socket for multiplayer games
+  // Socket events will be handled below
+}
+
+// Socket events (only for multiplayer)
 socket.on('init', (data) => {
+  if (isSinglePlayer) return; // Skip for single player
+  
   gameState.playerId = data.playerId;
   gameState.players = data.players;
   gameState.gameWidth = data.gameWidth;
@@ -994,7 +1098,14 @@ canvas.addEventListener('mousemove', (e) => {
     const dx = canvasCoords.x - tank.x;
     const dy = canvasCoords.y - tank.y;
     mouseAngle = Math.atan2(dy, dx);
-    socket.emit('rotate', { rotation: mouseAngle });
+    
+    if (!isSinglePlayer) {
+      socket.emit('rotate', { rotation: mouseAngle });
+    } else {
+      // Handle rotation locally for single player
+      tank.angle = mouseAngle;
+      tank.turretRotation = mouseAngle;
+    }
   }
 });
 
@@ -1021,7 +1132,12 @@ canvas.addEventListener('touchmove', (e) => {
 canvas.addEventListener('click', () => {
   if (isMobile || gameState.countdownActive || gameState.gameFinished || isSpectator) return;
   playShootSound();
-  socket.emit('shoot', {});
+  
+  if (isSinglePlayer && singlePlayerManager) {
+    singlePlayerManager.handlePlayerShoot(mouseAngle);
+  } else {
+    socket.emit('shoot', {});
+  }
 });
 
 // Touch start for aiming initialization (mobile)
@@ -1123,6 +1239,11 @@ function playShootSound() {
 
 // Game loop
 function gameLoop() {
+  // Update single player logic
+  if (isSinglePlayer && singlePlayerManager) {
+    singlePlayerManager.update();
+  }
+  
   // Update game timer
   if (gameState.gameStartTime && gameState.gameDuration) {
     const elapsed = Date.now() - gameState.gameStartTime;
@@ -1142,21 +1263,73 @@ function gameLoop() {
     if (myTank.isAlive && !gameState.countdownActive) {
       // Keyboard movement (desktop)
       if (!isMobile) {
-        if (keys['ArrowUp'] || keys['w'] || keys['W']) velocityY -= 5;
-        if (keys['ArrowDown'] || keys['s'] || keys['S']) velocityY += 5;
-        if (keys['ArrowLeft'] || keys['a'] || keys['A']) velocityX -= 5;
-        if (keys['ArrowRight'] || keys['d'] || keys['D']) velocityX += 5;
+        if (keys['ArrowUp'] || keys['w'] || keys['W']) velocityY -= 3;
+        if (keys['ArrowDown'] || keys['s'] || keys['S']) velocityY += 3;
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) velocityX -= 3;
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) velocityX += 3;
       } else {
         // Joystick movement (mobile)
         const joystickMovement = getJoystickMovement();
-        velocityX = joystickMovement.x * 5;
-        velocityY = joystickMovement.y * 5;
+        velocityX = joystickMovement.x * 3;
+        velocityY = joystickMovement.y * 3;
       }
 
       if (velocityX !== 0 || velocityY !== 0) {
-        socket.emit('move', { velocityX, velocityY });
+        if (!isSinglePlayer) {
+          socket.emit('move', { velocityX, velocityY });
+        } else {
+          // Handle movement locally for single player
+          const newX = myTank.x + velocityX;
+          const newY = myTank.y + velocityY;
+          
+          // Check obstacle collisions
+          let canMove = true;
+          for (let obstacle of gameState.obstacles) {
+            if (newX + TANK_SIZE > obstacle.x && newX - TANK_SIZE < obstacle.x + obstacle.width &&
+                newY + TANK_SIZE > obstacle.y && newY - TANK_SIZE < obstacle.y + obstacle.height) {
+              canMove = false;
+              break;
+            }
+          }
+          
+          // Check collision with other tanks
+          if (canMove) {
+            for (let tankId in gameState.players) {
+              if (tankId !== myTank.id) {
+                const otherTank = gameState.players[tankId];
+                if (!otherTank.isAlive) continue;
+                
+                const dx = newX - otherTank.x;
+                const dy = newY - otherTank.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Tanks collide if distance is less than 2x tank size
+                if (distance < TANK_SIZE * 2) {
+                  canMove = false;
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (canMove) {
+            myTank.x = newX;
+            myTank.y = newY;
+            
+            // Update base rotation based on movement direction (like online mode)
+            myTank.rotation = Math.atan2(velocityY, velocityX);
+          }
+          
+          // Wrap around edges (like online mode)
+          if (myTank.x < 0) myTank.x = gameState.gameWidth;
+          if (myTank.x > gameState.gameWidth) myTank.x = 0;
+          if (myTank.y < 0) myTank.y = gameState.gameHeight;
+          if (myTank.y > gameState.gameHeight) myTank.y = 0;
+        }
       } else {
-        socket.emit('move', { velocityX: 0, velocityY: 0 });
+        if (!isSinglePlayer) {
+          socket.emit('move', { velocityX: 0, velocityY: 0 });
+        }
       }
     } else {
       // Debug: Log once if not alive
@@ -1177,6 +1350,11 @@ function gameLoop() {
       const ammoDisplay = document.getElementById('ammoDisplay');
       ammoDisplay.style.display = 'block';
       document.getElementById('ammo').textContent = myTank.ammo;
+    } else if (isSinglePlayer && singlePlayerState.shotsRemaining !== undefined) {
+      // Single player target practice mode
+      const ammoDisplay = document.getElementById('ammoDisplay');
+      ammoDisplay.style.display = 'block';
+      document.getElementById('ammo').textContent = singlePlayerState.shotsRemaining;
     }
 
     // Update score and kills display
@@ -1195,9 +1373,35 @@ function gameLoop() {
     }
   }
 
-  // Clear canvas
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Clear canvas with campaign theme color if available
+  if (isSinglePlayer && gameState.campaignTheme) {
+    // Draw themed background
+    ctx.fillStyle = gameState.campaignTheme.color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add dark overlay to make gameplay visible
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add subtle pattern
+    ctx.strokeStyle = gameState.campaignTheme.color + '15';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < canvas.width; i += 50) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, canvas.height);
+      ctx.stroke();
+    }
+    for (let i = 0; i < canvas.height; i += 50) {
+      ctx.beginPath();
+      ctx.moveTo(0, i);
+      ctx.lineTo(canvas.width, i);
+      ctx.stroke();
+    }
+  } else {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 
   // Compute uniform scale to preserve 1:1 object ratios.
   // Use COVER mode (Math.max) so the battlefield fills the entire canvas (may crop edges).
@@ -1553,8 +1757,10 @@ function drawTank(tank, isPlayer) {
   ctx.fillStyle = healthPercent > 0.5 ? '#00ff00' : healthPercent > 0.25 ? '#ffff00' : '#ff0000';
   ctx.fillRect(x - TANK_SIZE, y + TANK_SIZE + 5, TANK_SIZE * 2 * healthPercent, 5);
   
-  // Draw player name above tank (but not for AI or spectating)
-  if (!isAI && !isSpectating) {
+  // Draw player/tank name above tank
+  // In single player campaign mode, show country names
+  // In other modes, show "You" for player and usernames for others
+  if (!isSpectating && (isSinglePlayer || !isAI)) {
     ctx.globalAlpha = 1;
     ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'center';
@@ -1562,7 +1768,8 @@ function drawTank(tank, isPlayer) {
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 3;
     
-    const displayName = isPlayer ? 'You' : (tank.username || 'Player');
+    // Show tank username (which is set appropriately based on mode in singleplayer.js)
+    const displayName = isSinglePlayer ? (tank.username || 'Player') : (isPlayer ? 'You' : (tank.username || 'Player'));
     
     // Draw text outline for better visibility
     ctx.strokeText(displayName, x, y - TANK_SIZE - 8);
@@ -1578,8 +1785,8 @@ function drawTank(tank, isPlayer) {
     ctx.fillText('SPECTATING', x, y - TANK_SIZE - 5);
   }
   
-  // Draw "BOT" label for AI tanks
-  if (isAI && !isSpectating) {
+  // Draw "BOT" label for AI tanks (skip in single player mode where we show country names)
+  if (isAI && !isSpectating && !isSinglePlayer) {
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#ff9900';
     ctx.font = 'bold 10px Arial';
@@ -1772,10 +1979,86 @@ function drawPowerup(powerup) {
 }
 
 function updatePlayerCount() {
+  // For single player, just show 1
+  if (isSinglePlayer) {
+    document.getElementById('playerCount').textContent = '1';
+    return;
+  }
   document.getElementById('playerCount').textContent = Object.keys(gameState.players).length;
 }
 
 function updateLeaderboard() {
+  // Hide leaderboard in single player
+  if (isSinglePlayer) {
+    const leaderboard = document.getElementById('leaderboard');
+    if (leaderboard) leaderboard.style.display = 'none';
+    
+    // Render single player UI instead
+    if (singlePlayerManager) {
+      const spUI = document.createElement('div');
+      spUI.id = 'sp-ui-overlay';
+      
+      // Position all single player modes at bottom center
+      spUI.style.cssText = `
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        font-family: Arial;
+        min-width: 250px;
+        z-index: 1000;
+        text-align: center;
+      `;
+      
+      // Remove old UI if exists
+      const old = document.getElementById('sp-ui-overlay');
+      if (old) old.remove();
+      
+      // Create content based on mode
+      let content = `<h3 style="margin:0 0 10px 0; color:#4CAF50">${singlePlayerState.mode.toUpperCase()}</h3>`;
+      
+      switch (singlePlayerState.mode) {
+        case 'training':
+          content += `<p>🎓 Practice Mode - No objectives</p>`;
+          break;
+        case 'timeattack':
+          const elapsed = Math.floor((Date.now() - singlePlayerState.startTime) / 1000);
+          const minutes = Math.floor(elapsed / 60);
+          const seconds = elapsed % 60;
+          content += `<p>⏱️ Time: ${minutes}:${seconds.toString().padStart(2, '0')}</p>`;
+          content += `<p>🎯 Destroyed: ${singlePlayerState.enemiesDestroyed}/${singlePlayerState.targetCount}</p>`;
+          break;
+        case 'targetpractice':
+          // Show campaign info
+          if (gameState.campaignTheme) {
+            content += `<p style="color: ${gameState.campaignTheme.color}; font-weight: bold; font-size: 1.1em;">${gameState.campaignTheme.name}</p>`;
+          }
+          
+          content += `<p>🌊 Wave: ${singlePlayerState.currentWave}/${singlePlayerState.totalWaves}</p>`;
+          content += `<p>💀 Enemies: ${singlePlayerState.enemiesKilled}/${singlePlayerState.totalEnemies}</p>`;
+          content += `<p>👹 Remaining: ${singlePlayerState.aiTanks.length}</p>`;
+          break;
+        case 'bossrush':
+          content += `<p>👑 Boss ${singlePlayerState.currentWave}/3</p>`;
+          if (singlePlayerState.bossHealth > 0) {
+            const healthPercent = Math.round((singlePlayerState.bossHealth / singlePlayerState.maxBossHealth) * 100);
+            content += `<p>💚 Boss HP: ${healthPercent}%</p>`;
+            content += `<div style="background:#333; height:10px; border-radius:5px; overflow:hidden;">
+              <div style="background:#ff0000; height:100%; width:${healthPercent}%"></div>
+            </div>`;
+          }
+          break;
+      }
+      
+      spUI.innerHTML = content;
+      document.getElementById('gameContainer').appendChild(spUI);
+    }
+    return;
+  }
   const scoreList = document.getElementById('scoreList');
   const players = Object.values(gameState.players)
     .sort((a, b) => b.score - a.score)

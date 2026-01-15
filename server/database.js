@@ -115,6 +115,41 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_monthly_stats_player_month ON monthly_stats(player_id, month)
     `);
 
+    // Drop and recreate single_player_stats table with correct schema
+    await client.query(`DROP TABLE IF EXISTS single_player_stats CASCADE`);
+    console.log('🗑️  Dropped old single_player_stats table');
+    
+    await client.query(`
+      CREATE TABLE single_player_stats (
+        id SERIAL PRIMARY KEY,
+        player_id VARCHAR(50) REFERENCES players(id) ON DELETE CASCADE,
+        mode VARCHAR(20) NOT NULL,
+        difficulty VARCHAR(10) NOT NULL,
+        won BOOLEAN NOT NULL,
+        time_seconds INTEGER NOT NULL,
+        kills INTEGER DEFAULT 0,
+        score INTEGER DEFAULT 0,
+        health INTEGER DEFAULT 0,
+        campaign VARCHAR(30),
+        enemies_killed INTEGER,
+        waves_completed INTEGER,
+        targets_destroyed INTEGER,
+        timestamp BIGINT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('✅ Created new single_player_stats table');
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_sp_stats_player ON single_player_stats(player_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_sp_stats_mode ON single_player_stats(mode)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_sp_stats_timestamp ON single_player_stats(timestamp DESC)
+    `);
+
     // Create global_chat_messages table
     await client.query(`
       CREATE TABLE IF NOT EXISTS global_chat_messages (
@@ -134,6 +169,139 @@ async function initDatabase() {
     console.log('✅ Database tables initialized successfully');
   } catch (err) {
     console.error('❌ Database initialization error:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Save single player game record
+async function saveSinglePlayerGame(playerId, gameData) {
+  const client = await pool.connect();
+  try {
+    console.log('💾 Inserting into database:', {
+      playerId,
+      mode: gameData.mode,
+      difficulty: gameData.difficulty,
+      won: gameData.won,
+      time: gameData.time
+    });
+    
+    await client.query(`
+      INSERT INTO single_player_stats (
+        player_id, mode, difficulty, won, time_seconds, kills, score, health,
+        campaign, enemies_killed, waves_completed, targets_destroyed, timestamp
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    `, [
+      playerId,
+      gameData.mode,
+      gameData.difficulty || 'normal',
+      gameData.won,
+      gameData.time,
+      gameData.kills,
+      gameData.score,
+      gameData.health,
+      gameData.campaign || null,
+      gameData.enemiesKilled || null,
+      gameData.wavesCompleted || null,
+      gameData.targetsDestroyed || null,
+      Date.now()
+    ]);
+    
+    console.log(`✅ Saved single player game for ${playerId}: ${gameData.mode} - ${gameData.won ? 'Won' : 'Lost'}`);
+  } catch (err) {
+    console.error('❌ Error saving single player game:', err);
+    console.error('Game data:', gameData);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Get single player stats summary for a player
+async function getSinglePlayerStats(playerId) {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(`
+      SELECT
+        COUNT(*) as total_games,
+        SUM(CASE WHEN won THEN 1 ELSE 0 END) as wins,
+        SUM(kills) as total_kills,
+        SUM(score) as total_score,
+        AVG(time_seconds) as avg_time,
+        MAX(score) as best_score,
+        MAX(kills) as best_kills,
+        COUNT(DISTINCT mode) as modes_played,
+        
+        -- Mode-specific stats
+        SUM(CASE WHEN mode = 'training' THEN 1 ELSE 0 END) as training_games,
+        SUM(CASE WHEN mode = 'timeattack' THEN 1 ELSE 0 END) as timeattack_games,
+        SUM(CASE WHEN mode = 'targetpractice' THEN 1 ELSE 0 END) as campaign_games,
+        SUM(CASE WHEN mode = 'bossrush' THEN 1 ELSE 0 END) as bossrush_games,
+        
+        -- Campaign stats
+        SUM(CASE WHEN mode = 'targetpractice' AND won THEN 1 ELSE 0 END) as campaigns_won,
+        COUNT(DISTINCT campaign) as unique_campaigns,
+        
+        -- Best times
+        MIN(CASE WHEN mode = 'timeattack' AND won THEN time_seconds END) as best_timeattack_time,
+        MIN(CASE WHEN mode = 'bossrush' AND won THEN time_seconds END) as best_bossrush_time
+      FROM single_player_stats
+      WHERE player_id = $1
+    `, [playerId]);
+    
+    return result.rows[0];
+  } catch (err) {
+    console.error('Error getting single player stats:', err);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Get single player leaderboard
+async function getSinglePlayerLeaderboard(mode = null, sortBy = 'wins') {
+  const client = await pool.connect();
+  try {
+    let orderClause;
+    switch (sortBy) {
+      case 'score':
+        orderClause = 'total_score DESC, total_wins DESC';
+        break;
+      case 'time':
+        orderClause = 'best_time ASC NULLS LAST, total_wins DESC';
+        break;
+      default:
+        orderClause = 'total_wins DESC, total_score DESC';
+    }
+    
+    const modeFilter = mode ? 'AND sp.mode = $1' : '';
+    const params = mode ? [mode] : [];
+    
+    const query = `
+      SELECT
+        p.id,
+        p.username,
+        p.google_id IS NOT NULL as is_google,
+        COUNT(*) as total_games,
+        SUM(CASE WHEN sp.won THEN 1 ELSE 0 END) as total_wins,
+        SUM(sp.kills) as total_kills,
+        SUM(sp.score) as total_score,
+        MAX(sp.score) as best_score,
+        MIN(CASE WHEN sp.won THEN sp.time_seconds END) as best_time,
+        AVG(sp.time_seconds) as avg_time
+      FROM players p
+      JOIN single_player_stats sp ON p.id = sp.player_id
+      WHERE 1=1 ${modeFilter}
+      GROUP BY p.id, p.username, p.google_id
+      ORDER BY ${orderClause}
+      LIMIT 100
+    `;
+    
+    const result = await client.query(query, params);
+    return result.rows;
+  } catch (err) {
+    console.error('Error getting single player leaderboard:', err);
     throw err;
   } finally {
     client.release();
@@ -1075,6 +1243,10 @@ module.exports = {
   createPlayer,
   updatePlayerUsername,
   isUsernameTaken,
+  // Single player functions
+  saveSinglePlayerGame,
+  getSinglePlayerStats,
+  getSinglePlayerLeaderboard,
   // Global chat functions
   saveGlobalChatMessage,
   getGlobalChatHistory,

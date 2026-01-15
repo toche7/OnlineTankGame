@@ -52,7 +52,53 @@
       </div>
     </div>
     
-    <div class="menu-section">
+    <!-- Menu Navigation Tabs -->
+    <div class="menu-tabs">
+      <button class="tab-btn active" data-tab="online" data-i18n="onlinePlay">🌐 Online Play</button>
+      <button class="tab-btn" data-tab="singleplayer" data-i18n="singlePlayer">🎮 Single Player</button>
+    </div>
+
+    <!-- Single Player Section -->
+    <div id="singlePlayerSection" class="menu-section hidden">
+      <h2 data-i18n="singlePlayerMode">Single Player Mode</h2>
+      
+      <div class="sp-mode-grid">
+        <div class="sp-mode-card" data-mode="training">
+          <div class="sp-mode-icon">🎓</div>
+          <h3 data-i18n="training">Training</h3>
+          <p data-i18n="trainingDesc">Learn the basics and practice your skills</p>
+          <button class="btn btn-primary" data-i18n="play">Play</button>
+        </div>
+
+        <div class="sp-mode-card" data-mode="timeattack">
+          <div class="sp-mode-icon">⏱️</div>
+          <h3 data-i18n="timeAttack">Time Attack</h3>
+          <p data-i18n="timeAttackDesc">Destroy targets as fast as possible</p>
+          <button class="btn btn-primary" data-i18n="play">Play</button>
+        </div>
+
+        <div class="sp-mode-card" data-mode="targetpractice">
+          <div class="sp-mode-icon">🎯</div>
+          <h3 data-i18n="targetPractice">Campaign Game</h3>
+          <p data-i18n="targetPracticeDesc">Improve your aim and accuracy</p>
+          <button class="btn btn-primary" data-i18n="play">Play</button>
+        </div>
+
+        <div class="sp-mode-card" data-mode="bossrush">
+          <div class="sp-mode-icon">👹</div>
+          <h3 data-i18n="bossRush">Boss Rush</h3>
+          <p data-i18n="bossRushDesc">Face powerful boss tanks in sequence</p>
+          <button class="btn btn-primary" data-i18n="play">Play</button>
+        </div>
+      </div>
+
+      <div class="sp-coming-soon">
+        <p>🚀 <span data-i18n="comingSoon">More single player modes coming soon!</span></p>
+      </div>
+    </div>
+
+    <!-- Online Play Section -->
+    <div id="onlinePlaySection" class="menu-section">
       <h2 data-i18n="gameBrowser">Game Browser</h2>
       
       <div id="waitingRoom" class="waiting-room hidden">

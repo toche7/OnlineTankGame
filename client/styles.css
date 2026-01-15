@@ -732,6 +732,29 @@ body {
     margin: 0;
     pointer-events: none;
   }
+  
+  /* Enable touch events on exit button */
+  #spExitBtn, .sp-exit-btn {
+    pointer-events: auto !important;
+    font-size: 0.75em !important;
+    padding: 6px 10px !important;
+    margin-top: 6px !important;
+    width: auto !important;
+  }
+  
+  /* Compact text for landscape mode */
+  #spExitBtn::before, .sp-exit-btn::before {
+    content: 'Exit' !important;
+  }
+  
+  /* Hide original button text */
+  #spExitBtn, .sp-exit-btn {
+    font-size: 0 !important;
+  }
+  
+  #spExitBtn::before, .sp-exit-btn::before {
+    font-size: 13px !important;
+  }
 
   #playerInfo h2 { display: none; }
 
